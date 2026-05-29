@@ -961,37 +961,27 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
     }
 
     // Filter applications dynamically
-    val filteredCurated = remember(searchQuery, selectedTab) {
+    val filteredCurated = remember(searchQuery) {
         CuratedApps.filter {
-            val matchesQuery = it.name.contains(searchQuery, ignoreCase = true) ||
+            it.name.contains(searchQuery, ignoreCase = true) ||
                     it.description.contains(searchQuery, ignoreCase = true)
-            val matchesTab = selectedTab == "All Apps" || selectedTab == "Streaming Channels"
-            matchesQuery && matchesTab
         }
     }
 
-    val filteredSystem = remember(searchQuery, systemApps, selectedTab) {
+    val filteredSystem = remember(searchQuery, systemApps) {
         systemApps.filter {
-            val matchesQuery = it.name.contains(searchQuery, ignoreCase = true) ||
+            it.name.contains(searchQuery, ignoreCase = true) ||
                     it.packageName.contains(searchQuery, ignoreCase = true)
-            val matchesTab = selectedTab == "All Apps" || selectedTab == "Device Applications"
-            matchesQuery && matchesTab
         }
-    }
-
-    val systemByCategory = remember(filteredSystem) {
-        filteredSystem.groupBy { it.category }
     }
 
     val pinnedApps = remember(favorites, systemApps) {
         systemApps.filter { favorites.contains(it.packageName) }
     }
 
-    val filteredPinned = remember(searchQuery, pinnedApps, selectedTab) {
+    val filteredPinned = remember(searchQuery, pinnedApps) {
         pinnedApps.filter {
-            val matchesQuery = it.name.contains(searchQuery, ignoreCase = true)
-            val matchesTab = selectedTab == "All Apps" || selectedTab == "Favorites Hub"
-            matchesQuery && matchesTab
+            it.name.contains(searchQuery, ignoreCase = true)
         }
     }
 
@@ -1023,41 +1013,41 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
         ) { paddingValues ->
             LazyColumn(
                 contentPadding = PaddingValues(
-                    top = paddingValues.calculateTopPadding() + 12.dp,
-                    bottom = paddingValues.calculateBottomPadding() + 100.dp
+                    top = paddingValues.calculateTopPadding() + 20.dp,
+                    bottom = paddingValues.calculateBottomPadding() + 80.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // PREMIUM MINIMAL TV LAUNCHER HEADHEADBAR (SCROLLABLE)
+                // TV CENTERED TITLE AND ACTION ROW (MATCHING USER REDESIGN IMAGE)
                 item {
-                    Row(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 24.dp, end = 24.dp, bottom = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
                     ) {
-                        Column {
-                            Text(
-                                text = "All Apps",
-                                color = Color.White,
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = FontFamily.SansSerif,
-                                letterSpacing = (-0.5).sp
-                            )
-                        }
+                        // Centered "Your apps" Title
+                        Text(
+                            text = "Your apps",
+                            color = Color.White,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Normal,
+                            fontFamily = FontFamily.SansSerif,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+
+                        // Top-Right Discrete Remote-friendly actions
                         Row(
+                            modifier = Modifier.align(Alignment.CenterEnd),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Sleek information launcher info button
                             var isInfoFocused by remember { mutableStateOf(false) }
                             IconButton(
                                 onClick = { isDeveloperInfoOpen = true },
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(36.dp)
                                     .onFocusChanged { isInfoFocused = it.isFocused }
                                     .focusable(enabled = !isCustomizerOpen && !isDeveloperInfoOpen)
                                     .border(
@@ -1074,7 +1064,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "Developer Info",
                                     tint = if (isInfoFocused) Color.White else FireOrangePrimary,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
 
@@ -1088,83 +1078,31 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                     }
                 }
 
-                // 1. SEARCH BOX
-                item {
-                    SearchSection(
-                        query = searchQuery,
-                        onQueryChange = { viewModel.updateSearchQuery(it) },
-                        isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen
-                    )
-                }
+                // UNIFIED FLAT GRID of all CURATED + INSTALLED apps (9 columns)
+                val allApps = (filteredCurated + filteredSystem).distinctBy { if (it.isSystem) it.packageName else it.id }
+                val chunkedApps = allApps.chunked(9)
 
-                // 3. CATEGORY BADGES
-                item {
-                    CategoryRow(
-                        selectedTab = selectedTab,
-                        onTabSelected = { viewModel.selectTab(it) },
-                        isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen
-                    )
-                }
-
-                // CASE: NO RESULTS FOUND STATE
-                if (filteredCurated.isEmpty() && filteredSystem.isEmpty() && filteredPinned.isEmpty()) {
+                if (allApps.isEmpty()) {
                     item {
                         EmptyStatePanel(searchQuery) {
                             viewModel.updateSearchQuery("")
-                            viewModel.selectTab("All Apps")
                         }
                     }
-                }
-
-                // 4. MAIN ROWS
-                if (filteredPinned.isNotEmpty() && (selectedTab == "All Apps" || selectedTab == "Favorites Hub")) {
-                    item {
-                        AppHorizontalGroup(
-                            title = "YOUR QUICK ACCESS SHORTCUTS",
-                            apps = filteredPinned,
-                            favorites = favorites,
-                            onAppClick = { launchAppDirectly(it) },
-                            isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen
-                        )
-                    }
-                }
-
-                if (filteredSystem.isNotEmpty() && (selectedTab == "All Apps" || selectedTab == "Device Applications")) {
-                    val preferredOrder = listOf("Games", "Productivity", "Social", "Entertainment", "Utilities", "Other")
-                    val categoryDisplayNames = mapOf(
-                        "Games" to "INSTALLED GAMES ZONE",
-                        "Productivity" to "PRODUCTIVITY SUITE",
-                        "Social" to "SOCIAL & MESSAGING",
-                        "Entertainment" to "MEDIA & ENTERTAINMENT",
-                        "Utilities" to "UTILITIES & HANDY TOOLS",
-                        "Other" to "OTHER DEVICE APPLICATIONS"
-                    )
-
-                    preferredOrder.forEach { cat ->
-                        val appsInCat = systemByCategory[cat]
-                        if (appsInCat != null && appsInCat.isNotEmpty()) {
-                            item(key = "system_category_$cat") {
-                                AppHorizontalGroup(
-                                    title = categoryDisplayNames[cat] ?: "${cat.uppercase()} APPS",
-                                    apps = appsInCat,
-                                    favorites = favorites,
-                                    onAppClick = { launchAppDirectly(it) },
-                                    isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen
-                                )
-                            }
-                        }
-                    }
-
-                    val otherFoundCategories = systemByCategory.keys.filter { it !in preferredOrder }
-                    otherFoundCategories.forEach { cat ->
-                        val appsInCat = systemByCategory[cat]
-                        if (appsInCat != null && appsInCat.isNotEmpty()) {
-                            item(key = "system_category_$cat") {
-                                AppHorizontalGroup(
-                                    title = "${cat.uppercase()} APPS",
-                                    apps = appsInCat,
-                                    favorites = favorites,
-                                    onAppClick = { launchAppDirectly(it) },
+                } else {
+                    items(chunkedApps) { rowApps ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            rowApps.forEach { app ->
+                                val isPinned = favorites.contains(if (app.isSystem) app.packageName else app.id)
+                                AppCircularHubCard(
+                                    appItem = app,
+                                    isPinned = isPinned,
+                                    onClick = { launchAppDirectly(app) },
                                     isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen
                                 )
                             }
