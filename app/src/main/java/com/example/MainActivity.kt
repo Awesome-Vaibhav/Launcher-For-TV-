@@ -18,6 +18,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -31,7 +32,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -64,6 +67,14 @@ data class AppItem(
     val mockShow: String = "Featured Live Stream",
     val launchIntent: Intent? = null,
     val iconDrawable: Drawable? = null
+)
+
+data class CalendarFields(
+    val hour: Int,
+    val minute: Int,
+    val day: Int,
+    val month: Int,
+    val year: Int
 )
 
 // List of customized curated streaming applications mimicking a real Fire Stick experience
@@ -307,6 +318,59 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
     private val _isStreamingFeedActive = MutableStateFlow(false)
     val isStreamingFeedActive = _isStreamingFeedActive.asStateFlow()
 
+    // Customizable Clock & Date States
+    private val _useSystemTime = MutableStateFlow(true)
+    val useSystemTime = _useSystemTime.asStateFlow()
+
+    private val _timeFormat24h = MutableStateFlow(false)
+    val timeFormat24h = _timeFormat24h.asStateFlow()
+
+    private val _timeOffset = MutableStateFlow(0L)
+    val timeOffset = _timeOffset.asStateFlow()
+
+    fun setUseSystemTime(value: Boolean) {
+        _useSystemTime.value = value
+        if (value) {
+            _timeOffset.value = 0L
+        }
+    }
+
+    fun setTimeFormat24h(value: Boolean) {
+        _timeFormat24h.value = value
+    }
+
+    fun setCustomDateTime(hour: Int, minute: Int, day: Int, month: Int, year: Int) {
+        try {
+            val calendar = java.util.Calendar.getInstance()
+            calendar.set(java.util.Calendar.YEAR, year)
+            calendar.set(java.util.Calendar.MONTH, month - 1)
+            calendar.set(java.util.Calendar.DAY_OF_MONTH, day)
+            calendar.set(java.util.Calendar.HOUR_OF_DAY, hour)
+            calendar.set(java.util.Calendar.MINUTE, minute)
+            calendar.set(java.util.Calendar.SECOND, 0)
+            calendar.set(java.util.Calendar.MILLISECOND, 0)
+
+            val targetMillis = calendar.timeInMillis
+            _timeOffset.value = targetMillis - System.currentTimeMillis()
+            _useSystemTime.value = false
+        } catch (e: Exception) {
+            // Fallback
+        }
+    }
+
+    fun getCalendarFields(): CalendarFields {
+        val millis = System.currentTimeMillis() + if (_useSystemTime.value) 0L else _timeOffset.value
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = millis
+        return CalendarFields(
+            hour = cal.get(java.util.Calendar.HOUR_OF_DAY),
+            minute = cal.get(java.util.Calendar.MINUTE),
+            day = cal.get(java.util.Calendar.DAY_OF_MONTH),
+            month = cal.get(java.util.Calendar.MONTH) + 1, // 1-based
+            year = cal.get(java.util.Calendar.YEAR)
+        )
+    }
+
     init {
         loadFavorites()
         loadSystemApps()
@@ -450,6 +514,340 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// CLOCK TICK GENERATOR WITH SMOOTH COROUTINE COUPLING
+@Composable
+fun rememberCurrentTimeAndDate(
+    useSystemTime: Boolean,
+    timeOffset: Long,
+    is24h: Boolean
+): Pair<String, String> {
+    var tick by remember { mutableStateOf(0L) }
+
+    DisposableEffect(useSystemTime, timeOffset) {
+        val timer = java.util.Timer()
+        timer.scheduleAtFixedRate(object : java.util.TimerTask() {
+            override fun run() {
+                tick++
+            }
+        }, 0L, 1000L)
+        onDispose {
+            timer.cancel()
+        }
+    }
+
+    return remember(tick, useSystemTime, timeOffset, is24h) {
+        val currentTimeMillis = System.currentTimeMillis() + if (useSystemTime) 0L else timeOffset
+        val date = java.util.Date(currentTimeMillis)
+
+        val timePattern = if (is24h) "HH:mm" else "hh:mm a"
+        val timeFormat = java.text.SimpleDateFormat(timePattern, java.util.Locale.getDefault())
+        val timeStr = timeFormat.format(date)
+
+        val datePattern = "EEEE, MMMM dd, yyyy"
+        val dateFormat = java.text.SimpleDateFormat(datePattern, java.util.Locale.getDefault())
+        val dateStr = dateFormat.format(date)
+
+        Pair(timeStr, dateStr)
+    }
+}
+
+// DESIGN COMPLIANT TV CLOCK WITH SEAMLESS INTERACTION
+@Composable
+fun MinimalistTopClock(
+    viewModel: FireAppsViewModel,
+    onClockClick: () -> Unit
+) {
+    val useSystemTime by viewModel.useSystemTime.collectAsState()
+    val timeOffset by viewModel.timeOffset.collectAsState()
+    val is24h by viewModel.timeFormat24h.collectAsState()
+
+    val (timeStr, dateStr) = rememberCurrentTimeAndDate(
+        useSystemTime = useSystemTime,
+        timeOffset = timeOffset,
+        is24h = is24h
+    )
+
+    var isFocused by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .clickable { onClockClick() }
+            .border(
+                width = if (isFocused) 1.5.dp else 1.dp,
+                color = if (isFocused) Color.White else Color(0x1FFFFFFF),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .background(
+                color = if (isFocused) Color(0x11FFFFFF) else Color(0x05FFFFFF),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.End
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.DateRange,
+                contentDescription = null,
+                tint = if (isFocused) Color.White else FireOrangePrimary,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = timeStr,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = dateStr,
+            color = if (isFocused) Color.White else FireTextSecondary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+// TV CUSTOMIZER DIALOG OVERLAY WITH SEAMLESS D-PAD CLICKS
+@Composable
+fun CalendarTimeCustomizerOverlay(
+    viewModel: FireAppsViewModel,
+    onClose: () -> Unit
+) {
+    val useSystemTime by viewModel.useSystemTime.collectAsState()
+    val is24h by viewModel.timeFormat24h.collectAsState()
+
+    var fields by remember { mutableStateOf(viewModel.getCalendarFields()) }
+
+    LaunchedEffect(useSystemTime) {
+        if (useSystemTime) {
+            fields = viewModel.getCalendarFields()
+        }
+    }
+
+    val updateTime = { h: Int, m: Int ->
+        fields = fields.copy(hour = (h + 24) % 24, minute = (m + 60) % 60)
+        viewModel.setCustomDateTime(fields.hour, fields.minute, fields.day, fields.month, fields.year)
+    }
+
+    val updateDate = { d: Int, mo: Int, y: Int ->
+        val safeMonth = ((mo - 1 + 12) % 12) + 1
+        val safeYear = y.coerceIn(1970, 2100)
+        fields = fields.copy(day = d.coerceIn(1, 31), month = safeMonth, year = safeYear)
+        viewModel.setCustomDateTime(fields.hour, fields.minute, fields.day, fields.month, fields.year)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f))
+            .clickable(enabled = true) { /* Intercept click backdrop */ }
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF141A24)),
+            border = BorderStroke(1.5.dp, Color(0xFF2C3E50)),
+            modifier = Modifier
+                .widthIn(max = 440.dp)
+                .fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = FireOrangePrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Text(
+                            text = "Time & Date Settings",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    IconButton(onClick = onClose) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
+                }
+
+                HorizontalDivider(color = Color(0x33FFFFFF), thickness = 1.dp)
+
+                // 24 Hour Toggle Format Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { viewModel.setTimeFormat24h(!is24h) }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("24-Hour Time Format", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Toggle between 12-hour and 24-hour style", color = FireTextSecondary, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = is24h,
+                        onCheckedChange = { viewModel.setTimeFormat24h(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = FireOrangePrimary,
+                            checkedTrackColor = FireOrangePrimary.copy(alpha = 0.4f)
+                        )
+                    )
+                }
+
+                // Auto System Time Toggle Format Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { viewModel.setUseSystemTime(!useSystemTime) }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Network Auto Sync Time", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Sync clock with system background driver", color = FireTextSecondary, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = useSystemTime,
+                        onCheckedChange = { viewModel.setUseSystemTime(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = FireOrangePrimary,
+                            checkedTrackColor = FireOrangePrimary.copy(alpha = 0.4f)
+                        )
+                    )
+                }
+
+                if (!useSystemTime) {
+                    HorizontalDivider(color = Color(0x1AFFFFFF), thickness = 1.dp)
+
+                    Text(
+                        text = "MANUAL CALENDAR SETTINGS",
+                        color = FireOrangePrimary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    AdjustmentRow(
+                        label = "Hours (0-23)",
+                        value = fields.hour.toString().padStart(2, '0'),
+                        onDecrement = { updateTime(fields.hour - 1, fields.minute) },
+                        onIncrement = { updateTime(fields.hour + 1, fields.minute) }
+                    )
+
+                    AdjustmentRow(
+                        label = "Minutes (0-59)",
+                        value = fields.minute.toString().padStart(2, '0'),
+                        onDecrement = { updateTime(fields.hour, fields.minute - 1) },
+                        onIncrement = { updateTime(fields.hour, fields.minute + 1) }
+                    )
+
+                    AdjustmentRow(
+                        label = "Day of Month",
+                        value = fields.day.toString().padStart(2, '0'),
+                        onDecrement = { updateDate(fields.day - 1, fields.month, fields.year) },
+                        onIncrement = { updateDate(fields.day + 1, fields.month, fields.year) }
+                    )
+
+                    val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                    AdjustmentRow(
+                        label = "Month",
+                        value = monthNames.getOrNull(fields.month - 1) ?: fields.month.toString(),
+                        onDecrement = { updateDate(fields.day, fields.month - 1, fields.year) },
+                        onIncrement = { updateDate(fields.day, fields.month + 1, fields.year) }
+                    )
+
+                    AdjustmentRow(
+                        label = "Year",
+                        value = fields.year.toString(),
+                        onDecrement = { updateDate(fields.day, fields.month, fields.year - 1) },
+                        onIncrement = { updateDate(fields.day, fields.month, fields.year + 1) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Button(
+                    onClick = onClose,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = FireOrangePrimary)
+                ) {
+                    Text("Apply & Exit Settings", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AdjustmentRow(
+    label: String,
+    value: String,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            FilledIconButton(
+                onClick = onDecrement,
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF2C3E50)),
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(imageVector = Icons.Default.KeyboardArrowLeft, contentDescription = "Decrement", tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+            Box(
+                modifier = Modifier.width(54.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = value,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+            FilledIconButton(
+                onClick = onIncrement,
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF2C3E50)),
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(imageVector = Icons.Default.KeyboardArrowRight, contentDescription = "Increment", tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
 // PRIMARY JETPACK COMPOSE COMPONENT
 @Composable
 fun FireAppsDashboard(viewModel: FireAppsViewModel) {
@@ -503,86 +901,57 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
         selectedApp ?: filteredCurated.firstOrNull() ?: CuratedApps.first()
     }
 
+    var isCustomizerOpen by remember { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0C0F13), // Deep slate black
-                        Color(0xFF07090C)
-                    )
+            .background(Color(0xFF07080A))
+            .drawBehind {
+                // Soft warm cherry-red/dark-maroon ambient halo glow in top-left to mimic the uploaded design photo
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0x33FF3333), Color.Transparent),
+                        center = Offset(size.width * 0.12f, size.height * 0.15f),
+                        radius = size.width * 0.7f
+                    ),
+                    radius = size.width * 0.7f,
+                    center = Offset(size.width * 0.12f, size.height * 0.15f)
                 )
-            )
+            }
     ) {
         // SCROLLABLE INTERFACE LAYOUT
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                // TV CINEMATIC CABIN HEADBOARD
-                Column(
+                // PREMIUM MINIMAL TV LAUNCHER HEADHEADBAR
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Title Branding Logo
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(
-                                        brush = Brush.linearGradient(
-                                            colors = listOf(FireOrangePrimary, FireAmberAccent)
-                                        ),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Home,
-                                    contentDescription = null,
-                                    tint = FireDarkBackground,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "FIRE STICK APPS+",
-                                    color = FireTextPrimary,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Black,
-                                    fontFamily = FontFamily.SansSerif
-                                )
-                                Text(
-                                    text = "TV CINEMATIC DESKTOP DRIVER",
-                                    color = FireOrangePrimary,
-                                    fontSize = 9.sp,
-                                    letterSpacing = 1.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        // Simple stats tag
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0x33FF6400), RoundedCornerShape(20.dp))
-                                .border(1.dp, Color(0x66FF6400), RoundedCornerShape(20.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "Installed: ${systemApps.size} | Pins: ${favorites.size}",
-                                color = FireTextPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+                    Column {
+                        Text(
+                            text = "Your apps",
+                            color = Color.White,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.SansSerif,
+                            letterSpacing = (-0.5).sp
+                        )
+                        Text(
+                            text = "GOOGLE TV REMOTE FRIENDLY APPLIST",
+                            color = FireOrangePrimary,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                    MinimalistTopClock(viewModel = viewModel) {
+                        isCustomizerOpen = true
                     }
                 }
             }
@@ -595,14 +964,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                 verticalArrangement = Arrangement.spacedBy(24.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // 1. DYNAMIC CINE Billboard
-                item {
-                    CinemaBillboard(appItem = focusedBannerItem) {
-                        viewModel.selectApp(focusedBannerItem)
-                    }
-                }
-
-                // 2. SEARCH BOX
+                // 1. SEARCH BOX
                 item {
                     SearchSection(
                         query = searchQuery,
@@ -734,6 +1096,12 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                     app = app,
                     onClose = { viewModel.setStreamingFeed(false) }
                 )
+            }
+        }
+
+        if (isCustomizerOpen) {
+            CalendarTimeCustomizerOverlay(viewModel = viewModel) {
+                isCustomizerOpen = false
             }
         }
     }
@@ -1021,13 +1389,13 @@ fun AppHorizontalGroup(
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             items(apps, key = { it.id }) { app ->
                 val isPinned = favorites.contains(if (app.isSystem) app.packageName else app.id)
 
-                AppHubCard(
+                AppCircularHubCard(
                     appItem = app,
                     isPinned = isPinned,
                     onClick = { onAppClick(app) }
@@ -1037,39 +1405,62 @@ fun AppHorizontalGroup(
     }
 }
 
-// COHESIVE SYSTEM CARD WITH RICH PADDING
+// PREMIUM CIRCULAR TV APP SHORTCUT COMPONENT WITH BLURRY HALO FOCUS FEEDBACK
 @Composable
-fun AppHubCard(
+fun AppCircularHubCard(
     appItem: AppItem,
     isPinned: Boolean,
     onClick: () -> Unit
 ) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF13171D)),
+    var isFocused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(targetValue = if (isFocused) 1.15f else 1.0f, animationSpec = spring())
+    val haloAlpha by animateFloatAsState(targetValue = if (isFocused) 0.5f else 0.0f)
+
+    Column(
         modifier = Modifier
-            .width(110.dp)
-            .border(
-                width = 1.dp,
-                color = if (isPinned) FireOrangePrimary.copy(alpha = 0.4f) else Color(0x11FFFFFF),
-                shape = RoundedCornerShape(16.dp)
-            )
+            .width(96.dp)
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
             .clickable { onClick() }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+        Box(
+            modifier = Modifier.size(92.dp),
+            contentAlignment = Alignment.Center
         ) {
+            // Glow aura background matching the app's brandColor
+            if (isFocused || haloAlpha > 0f) {
+                val auraColor = appItem.brandColor
+                Box(
+                    modifier = Modifier
+                        .size(86.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(auraColor.copy(alpha = haloAlpha), Color.Transparent),
+                            ),
+                            shape = CircleShape
+                )
+                        )
+            }
+
+            // Normal Circle Box
             Box(
                 modifier = Modifier
                     .size(68.dp)
-                    .shadow(4.dp, RoundedCornerShape(12.dp))
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF0A0C0F))
-                    .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp)),
+                    .background(
+                        color = if (isFocused) Color.White else Color(0xFF141A24),
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = if (isFocused) 2.5.dp else 1.dp,
+                        color = if (isFocused) Color.White else Color(0x1FFFFFFF),
+                        shape = CircleShape
+                    )
+                    .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 AppIcon(
@@ -1082,7 +1473,7 @@ fun AppHubCard(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(2.dp)
-                            .size(16.dp)
+                            .size(14.dp)
                             .background(FireOrangePrimary, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1090,24 +1481,24 @@ fun AppHubCard(
                             imageVector = Icons.Default.Favorite,
                             contentDescription = "Pinned App",
                             tint = Color.Black,
-                            modifier = Modifier.size(9.dp)
+                            modifier = Modifier.size(8.dp)
                         )
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = appItem.name,
-                color = FireTextPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 14.sp
-            )
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = appItem.name,
+            color = if (isFocused) Color.White else FireTextSecondary,
+            fontSize = 11.sp,
+            fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 13.sp
+        )
     }
 }
 
