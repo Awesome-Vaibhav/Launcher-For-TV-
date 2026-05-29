@@ -18,6 +18,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -415,6 +417,37 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
         return colors[index]
     }
 
+    private fun getSavedAppsOrder(): List<String> {
+        val savedString = sharedPrefs.getString("apps_order_list", "") ?: ""
+        if (savedString.isEmpty()) return emptyList()
+        return savedString.split(",")
+    }
+
+    private fun saveAppsOrder(order: List<String>) {
+        val s = order.joinToString(",")
+        sharedPrefs.edit().putString("apps_order_list", s).apply()
+    }
+
+    fun moveApp(packageName: String, direction: Int) {
+        val currentList = _systemApps.value.toMutableList()
+        val index = currentList.indexOfFirst { it.packageName == packageName }
+        if (index == -1) return
+
+        val targetIndex = index + direction
+        if (targetIndex in 0 until currentList.size) {
+            // Swap
+            val temp = currentList[index]
+            currentList[index] = currentList[targetIndex]
+            currentList[targetIndex] = temp
+
+            // Save new order
+            val newOrder = currentList.map { it.packageName }
+            saveAppsOrder(newOrder)
+
+            _systemApps.value = currentList
+        }
+    }
+
     private fun loadSystemApps() {
         coroutineScope.launch {
             val apps = withContext(Dispatchers.IO) {
@@ -423,7 +456,7 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
                     addCategory(Intent.CATEGORY_LAUNCHER)
                 }
                 val resolveInfos = pm.queryIntentActivities(intent, 0) ?: emptyList()
-                resolveInfos.mapNotNull { info ->
+                val parsed = resolveInfos.mapNotNull { info ->
                     val activityInfo = info?.activityInfo ?: return@mapNotNull null
                     val pName = activityInfo.packageName ?: return@mapNotNull null
                     if (pName == context.packageName) return@mapNotNull null
@@ -473,7 +506,17 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
                         launchIntent = launchIntent,
                         iconDrawable = icon
                     )
-                }.distinctBy { it.packageName }.sortedBy { it.name.lowercase() }
+                }.distinctBy { it.packageName }
+
+                val savedOrder = getSavedAppsOrder()
+                if (savedOrder.isEmpty()) {
+                    parsed.sortedBy { it.name.lowercase() }
+                } else {
+                    parsed.sortedWith(compareBy { app ->
+                        val idx = savedOrder.indexOf(app.packageName)
+                        if (idx != -1) idx else Int.MAX_VALUE
+                    })
+                }
             }
             _systemApps.value = apps
         }
@@ -927,6 +970,276 @@ fun AdjustmentRow(
     }
 }
 
+// REMOTE FRIENDLY TV LAUNCHER APP MANAGEMENT AND SPATIAL REARRANGE OVERLAY
+@Composable
+fun AppRearrangeOptionsDialog(
+    appItem: AppItem,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    onMoveLeft: () -> Unit,
+    onMoveRight: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    canMoveLeft: Boolean,
+    canMoveRight: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onClose: () -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        try {
+            focusRequester.requestFocus()
+        } catch (e: Exception) {}
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f))
+            .clickable(enabled = true) { onClose() }
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF141A24)),
+            border = BorderStroke(1.5.dp, FireOrangePrimary.copy(alpha = 0.6f)),
+            modifier = Modifier
+                .widthIn(max = 420.dp)
+                .fillMaxWidth()
+                .clickable(enabled = true, onClick = {}) // Intercept click inside card
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // Header with app name
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Color(0xFF101416), CircleShape)
+                            .border(1.dp, Color(0x33FFFFFF), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppIcon(app = appItem, modifier = Modifier.fillMaxSize())
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = appItem.name,
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Rearrange & Favorites Options",
+                            color = FireTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    IconButton(onClick = onClose) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
+                }
+
+                HorizontalDivider(color = Color(0x22FFFFFF), thickness = 1.dp)
+
+                // The Spatial D-Pad Visualizer to Move App
+                Text(
+                    text = "REARRANGE POSITION",
+                    color = FireOrangePrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Up Button
+                    var isUpFocused by remember { mutableStateOf(false) }
+                    IconButton(
+                        onClick = onMoveUp,
+                        enabled = canMoveUp,
+                        modifier = Modifier
+                            .focusRequester(focusRequester) // Set focus to Up button initially
+                            .size(48.dp)
+                            .onFocusChanged { isUpFocused = it.isFocused }
+                            .background(
+                                color = if (isUpFocused) Color.White else if (canMoveUp) Color(0xFF1F2A38) else Color(0x11FFFFFF),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                width = if (isUpFocused) 2.dp else 1.dp,
+                                color = if (isUpFocused) Color.White else Color(0x22FFFFFF),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Move Up",
+                            tint = if (!canMoveUp) Color.Gray else if (isUpFocused) Color.Black else Color.White
+                        )
+                    }
+
+                    // Middle Row: Left, App Mini-Preview, Right
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Left Button
+                        var isLeftFocused by remember { mutableStateOf(false) }
+                        IconButton(
+                            onClick = onMoveLeft,
+                            enabled = canMoveLeft,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .onFocusChanged { isLeftFocused = it.isFocused }
+                                .background(
+                                    color = if (isLeftFocused) Color.White else if (canMoveLeft) Color(0xFF1F2A38) else Color(0x11FFFFFF),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .border(
+                                    width = if (isLeftFocused) 2.dp else 1.dp,
+                                    color = if (isLeftFocused) Color.White else Color(0x22FFFFFF),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowLeft,
+                                contentDescription = "Move Left",
+                                tint = if (!canMoveLeft) Color.Gray else if (isLeftFocused) Color.Black else Color.White
+                            )
+                        }
+
+                        // App mini icon in the center of directionals
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 24.dp)
+                                .size(56.dp)
+                                .background(Color(0xFF0C1015), CircleShape)
+                                .border(1.5.dp, FireOrangePrimary, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AppIcon(app = appItem, modifier = Modifier.fillMaxSize())
+                        }
+
+                        // Right Button
+                        var isRightFocused by remember { mutableStateOf(false) }
+                        IconButton(
+                            onClick = onMoveRight,
+                            enabled = canMoveRight,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .onFocusChanged { isRightFocused = it.isFocused }
+                                .background(
+                                    color = if (isRightFocused) Color.White else if (canMoveRight) Color(0xFF1F2A38) else Color(0x11FFFFFF),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .border(
+                                    width = if (isRightFocused) 2.dp else 1.dp,
+                                    color = if (isRightFocused) Color.White else Color(0x22FFFFFF),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowRight,
+                                contentDescription = "Move Right",
+                                tint = if (!canMoveRight) Color.Gray else if (isRightFocused) Color.Black else Color.White
+                            )
+                        }
+                    }
+
+                    // Down Button
+                    var isDownFocused by remember { mutableStateOf(false) }
+                    IconButton(
+                        onClick = onMoveDown,
+                        enabled = canMoveDown,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .onFocusChanged { isDownFocused = it.isFocused }
+                            .background(
+                                color = if (isDownFocused) Color.White else if (canMoveDown) Color(0xFF1F2A38) else Color(0x11FFFFFF),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                width = if (isDownFocused) 2.dp else 1.dp,
+                                color = if (isDownFocused) Color.White else Color(0x22FFFFFF),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Move Down",
+                            tint = if (!canMoveDown) Color.Gray else if (isDownFocused) Color.Black else Color.White
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color(0x11FFFFFF), thickness = 1.dp)
+
+                // Favorite Toggle & Exit Buttons Bottom Rows
+                var isFavoriteFocused by remember { mutableStateOf(false) }
+                Button(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { isFavoriteFocused = it.isFocused }
+                        .border(
+                            width = if (isFavoriteFocused) 2.dp else 0.dp,
+                            color = Color.White,
+                            shape = RoundedCornerShape(100.dp)
+                        ),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isFavoriteFocused) Color.White else if (isFavorite) Color(0xFF2C3E50) else Color(0xFFe74c3c),
+                        contentColor = if (isFavoriteFocused) Color.Black else Color.White
+                    )
+                ) {
+                    val label = if (isFavorite) "Remove from Favorites" else "Add to Favorites"
+                    val iconVector = if (isFavorite) Icons.Default.FavoriteBorder else Icons.Default.Favorite
+                    Icon(
+                        imageVector = iconVector,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp).size(16.dp)
+                    )
+                    Text(text = label, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                var isDoneFocused by remember { mutableStateOf(false) }
+                Button(
+                    onClick = onClose,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { isDoneFocused = it.isFocused }
+                        .border(
+                            width = if (isDoneFocused) 2.dp else 0.dp,
+                            color = Color.White,
+                            shape = RoundedCornerShape(100.dp)
+                        ),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDoneFocused) Color.White else FireOrangePrimary,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Done / Exit Options", fontWeight = FontWeight.Black, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
 // PRIMARY JETPACK COMPOSE COMPONENT
 @Composable
 fun FireAppsDashboard(viewModel: FireAppsViewModel) {
@@ -940,34 +1253,18 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
 
     var isDeveloperInfoOpen by remember { mutableStateOf(false) }
     var isCustomizerOpen by remember { mutableStateOf(false) }
+    var appToEdit by remember { mutableStateOf<AppItem?>(null) }
 
     // Direct app launching logic with 1-click fallback
     val launchAppDirectly = { app: AppItem ->
-        if (app.isSystem) {
-            if (app.launchIntent != null) {
-                try {
-                    context.startActivity(app.launchIntent)
-                } catch (e: Exception) {
-                    Toast.makeText(context, "Could not launch ${app.name}", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                Toast.makeText(context, "Launch intent not available for ${app.name}", Toast.LENGTH_SHORT).show()
+        if (app.launchIntent != null) {
+            try {
+                context.startActivity(app.launchIntent)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Could not launch ${app.name}", Toast.LENGTH_SHORT).show()
             }
         } else {
-            // For curated digital stream/channels, open the immersive CinemaFeedPlayer simulation
-            viewModel.selectApp(app)
-            viewModel.setStreamingFeed(true)
-        }
-    }
-
-    // Filter applications dynamically to only show those actually installed on the device
-    val filteredCurated = remember(searchQuery, systemApps) {
-        val installedPackageNames = systemApps.map { it.packageName }.toSet()
-        CuratedApps.filter { curated ->
-            installedPackageNames.contains(curated.packageName) && (
-                curated.name.contains(searchQuery, ignoreCase = true) ||
-                curated.description.contains(searchQuery, ignoreCase = true)
-            )
+            Toast.makeText(context, "Launch intent not available for ${app.name}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -978,20 +1275,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
         }
     }
 
-    val pinnedApps = remember(favorites, systemApps) {
-        systemApps.filter { favorites.contains(it.packageName) }
-    }
-
-    val filteredPinned = remember(searchQuery, pinnedApps) {
-        pinnedApps.filter {
-            it.name.contains(searchQuery, ignoreCase = true)
-        }
-    }
-
-    // Determine target fallback banner
-    val focusedBannerItem = remember(selectedApp, filteredCurated, filteredSystem) {
-        selectedApp ?: filteredCurated.firstOrNull() ?: filteredSystem.firstOrNull() ?: CuratedApps.first()
-    }
+    val allApps = filteredSystem
 
     Box(
         modifier = Modifier
@@ -1040,7 +1324,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                                 modifier = Modifier
                                     .size(36.dp)
                                     .onFocusChanged { isInfoFocused = it.isFocused }
-                                    .focusable(enabled = !isCustomizerOpen && !isDeveloperInfoOpen)
+                                    .focusable(enabled = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null)
                                     .border(
                                         width = if (isInfoFocused) 1.5.dp else 1.dp,
                                         color = if (isInfoFocused) Color.White else Color(0x1FFFFFFF),
@@ -1061,7 +1345,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
 
                             MinimalistTopClock(
                                 viewModel = viewModel,
-                                isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen
+                                isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null
                             ) {
                                 isCustomizerOpen = true
                             }
@@ -1069,8 +1353,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                     }
                 }
 
-                // UNIFIED FLAT GRID of all CURATED + INSTALLED apps (8 columns to perfectly fit TV screen width)
-                val allApps = (filteredCurated + filteredSystem).distinctBy { it.packageName }
+                // UNIFIED FLAT GRID of all INSTALLED apps (8 columns to perfectly fit TV screen width)
                 val chunkedApps = allApps.chunked(8)
 
                 if (allApps.isEmpty()) {
@@ -1094,7 +1377,8 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                                     appItem = app,
                                     isPinned = isPinned,
                                     onClick = { launchAppDirectly(app) },
-                                    isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen
+                                    onLongClick = { appToEdit = app },
+                                    isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null
                                 )
                             }
                         }
@@ -1130,6 +1414,26 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
             DeveloperInfoOverlay {
                 isDeveloperInfoOpen = false
             }
+        }
+
+        if (appToEdit != null) {
+            val app = appToEdit!!
+            val isPinned = favorites.contains(app.packageName)
+            val idx = allApps.indexOfFirst { it.packageName == app.packageName }
+            AppRearrangeOptionsDialog(
+                appItem = app,
+                isFavorite = isPinned,
+                onToggleFavorite = { viewModel.toggleFavorite(app.packageName) },
+                onMoveLeft = { viewModel.moveApp(app.packageName, -1) },
+                onMoveRight = { viewModel.moveApp(app.packageName, 1) },
+                onMoveUp = { viewModel.moveApp(app.packageName, -8) },
+                onMoveDown = { viewModel.moveApp(app.packageName, 8) },
+                canMoveLeft = idx > 0,
+                canMoveRight = idx != -1 && idx < allApps.size - 1,
+                canMoveUp = idx >= 8,
+                canMoveDown = idx != -1 && idx < allApps.size - 8,
+                onClose = { appToEdit = null }
+            )
         }
     }
 }
@@ -1685,11 +1989,13 @@ fun AppHorizontalGroup(
 }
 
 // PREMIUM CIRCULAR TV APP SHORTCUT COMPONENT WITH BLURRY HALO FOCUS FEEDBACK
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AppCircularHubCard(
     appItem: AppItem,
     isPinned: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     isFocusable: Boolean = true
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -1701,7 +2007,11 @@ fun AppCircularHubCard(
             .width(96.dp)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable(enabled = isFocusable)
-            .clickable(enabled = isFocusable) { onClick() }
+            .combinedClickable(
+                enabled = isFocusable,
+                onClick = { onClick() },
+                onLongClick = { onLongClick() }
+            )
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
