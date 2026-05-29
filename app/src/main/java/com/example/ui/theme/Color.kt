@@ -2,7 +2,7 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val FireDarkBackground = Color(0xFF090B0E)   // Infinitely deep cinematic slate black
+val FireDarkBackground = Color(0xFF000000)   // Pure AMOLED Cinematic Black
 val FireSurfaceDark = Color(0xFF15191E)      // Dark card surface
 val FireSurfaceFocus = Color(0xFF202730)     // Fire OS active item backing
 val FireOrangePrimary = Color(0xFFFA6400)    // Brand signature Fire Orange

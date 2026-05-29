@@ -993,28 +993,16 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF07080A))
-            .drawBehind {
-                // Soft warm cherry-red/dark-maroon ambient halo glow in top-left to mimic the uploaded design photo
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color(0x33FF3333), Color.Transparent),
-                        center = Offset(size.width * 0.12f, size.height * 0.15f),
-                        radius = size.width * 0.7f
-                    ),
-                    radius = size.width * 0.7f,
-                    center = Offset(size.width * 0.12f, size.height * 0.15f)
-                )
-            }
+            .background(Color.Black)
     ) {
-        // SCROLLABLE INTERFACE LAYOUT
+        // SCROLLABLE INTERFACE LAYOUT WITH CLIPTOPADDING = FALSE TO AVOID CUTTING OFF FOCUSED FONT DEVIATIONS
         Scaffold(
             containerColor = Color.Transparent
         ) { paddingValues ->
             LazyColumn(
                 contentPadding = PaddingValues(
                     top = paddingValues.calculateTopPadding() + 20.dp,
-                    bottom = paddingValues.calculateBottomPadding() + 80.dp
+                    bottom = paddingValues.calculateBottomPadding() + 140.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
@@ -1078,9 +1066,9 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                     }
                 }
 
-                // UNIFIED FLAT GRID of all CURATED + INSTALLED apps (9 columns)
+                // UNIFIED FLAT GRID of all CURATED + INSTALLED apps (8 columns to perfectly fit TV screen width)
                 val allApps = (filteredCurated + filteredSystem).distinctBy { if (it.isSystem) it.packageName else it.id }
-                val chunkedApps = allApps.chunked(9)
+                val chunkedApps = allApps.chunked(8)
 
                 if (allApps.isEmpty()) {
                     item {
