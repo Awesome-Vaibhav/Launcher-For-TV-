@@ -35,6 +35,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -524,15 +530,10 @@ fun rememberCurrentTimeAndDate(
 ): Pair<String, String> {
     var tick by remember { mutableStateOf(0L) }
 
-    DisposableEffect(useSystemTime, timeOffset) {
-        val timer = java.util.Timer()
-        timer.scheduleAtFixedRate(object : java.util.TimerTask() {
-            override fun run() {
-                tick++
-            }
-        }, 0L, 1000L)
-        onDispose {
-            timer.cancel()
+    LaunchedEffect(useSystemTime, timeOffset) {
+        while (true) {
+            kotlinx.coroutines.delay(1000L)
+            tick++
         }
     }
 
@@ -685,7 +686,21 @@ fun CalendarTimeCustomizerOverlay(
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    IconButton(onClick = onClose) {
+                    var isCloseFocused by remember { mutableStateOf(false) }
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier
+                            .onFocusChanged { isCloseFocused = it.isFocused }
+                            .background(
+                                color = if (isCloseFocused) Color(0x33FFFFFF) else Color.Transparent,
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = if (isCloseFocused) 1.5.dp else 0.dp,
+                                color = Color.White,
+                                shape = CircleShape
+                            )
+                    ) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                     }
                 }
@@ -693,12 +708,21 @@ fun CalendarTimeCustomizerOverlay(
                 HorizontalDivider(color = Color(0x33FFFFFF), thickness = 1.dp)
 
                 // 24 Hour Toggle Format Row
+                var is24hRowFocused by remember { mutableStateOf(false) }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .onFocusChanged { is24hRowFocused = it.isFocused }
+                        .focusable()
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { viewModel.setTimeFormat24h(!is24h) }
-                        .padding(vertical = 4.dp),
+                        .border(
+                            width = if (is24hRowFocused) 1.5.dp else 0.dp,
+                            color = if (is24hRowFocused) Color.White else Color.Transparent,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .background(if (is24hRowFocused) Color(0x1AFFFFFF) else Color.Transparent)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -717,12 +741,21 @@ fun CalendarTimeCustomizerOverlay(
                 }
 
                 // Auto System Time Toggle Format Row
+                var isAutoTimeRowFocused by remember { mutableStateOf(false) }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .onFocusChanged { isAutoTimeRowFocused = it.isFocused }
+                        .focusable()
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { viewModel.setUseSystemTime(!useSystemTime) }
-                        .padding(vertical = 4.dp),
+                        .border(
+                            width = if (isAutoTimeRowFocused) 1.5.dp else 0.dp,
+                            color = if (isAutoTimeRowFocused) Color.White else Color.Transparent,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .background(if (isAutoTimeRowFocused) Color(0x1AFFFFFF) else Color.Transparent)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -790,12 +823,23 @@ fun CalendarTimeCustomizerOverlay(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
+                var isApplyFocused by remember { mutableStateOf(false) }
                 Button(
                     onClick = onClose,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = FireOrangePrimary)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { isApplyFocused = it.isFocused }
+                        .border(
+                            width = if (isApplyFocused) 2.dp else 0.dp,
+                            color = Color.White,
+                            shape = RoundedCornerShape(100.dp)
+                        ),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isApplyFocused) Color.White else FireOrangePrimary,
+                        contentColor = Color.Black
+                    )
                 ) {
-                    Text("Apply & Exit Settings", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                    Text("Apply & Exit Settings", fontWeight = FontWeight.Black, fontSize = 13.sp)
                 }
             }
         }
@@ -819,12 +863,23 @@ fun AdjustmentRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            var isDecFocused by remember { mutableStateOf(false) }
             FilledIconButton(
                 onClick = onDecrement,
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF2C3E50)),
-                modifier = Modifier.size(28.dp)
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = if (isDecFocused) Color.White else Color(0xFF2C3E50),
+                    contentColor = if (isDecFocused) Color.Black else Color.White
+                ),
+                modifier = Modifier
+                    .size(32.dp)
+                    .onFocusChanged { isDecFocused = it.isFocused }
+                    .border(
+                        width = if (isDecFocused) 1.5.dp else 0.dp,
+                        color = Color.White,
+                        shape = CircleShape
+                    )
             ) {
-                Icon(imageVector = Icons.Default.KeyboardArrowLeft, contentDescription = "Decrement", tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(imageVector = Icons.Default.KeyboardArrowLeft, contentDescription = "Decrement", modifier = Modifier.size(18.dp))
             }
             Box(
                 modifier = Modifier.width(54.dp),
@@ -838,12 +893,23 @@ fun AdjustmentRow(
                     fontFamily = FontFamily.Monospace
                 )
             }
+            var isIncFocused by remember { mutableStateOf(false) }
             FilledIconButton(
                 onClick = onIncrement,
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF2C3E50)),
-                modifier = Modifier.size(28.dp)
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = if (isIncFocused) Color.White else Color(0xFF2C3E50),
+                    contentColor = if (isIncFocused) Color.Black else Color.White
+                ),
+                modifier = Modifier
+                    .size(32.dp)
+                    .onFocusChanged { isIncFocused = it.isFocused }
+                    .border(
+                        width = if (isIncFocused) 1.5.dp else 0.dp,
+                        color = Color.White,
+                        shape = CircleShape
+                    )
             ) {
-                Icon(imageVector = Icons.Default.KeyboardArrowRight, contentDescription = "Increment", tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(imageVector = Icons.Default.KeyboardArrowRight, contentDescription = "Increment", modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -921,41 +987,41 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
     ) {
         // SCROLLABLE INTERFACE LAYOUT
         Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                // PREMIUM MINIMAL TV LAUNCHER HEADHEADBAR
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "All Apps",
-                            color = Color.White,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.SansSerif,
-                            letterSpacing = (-0.5).sp
-                        )
-                    }
-                    MinimalistTopClock(viewModel = viewModel) {
-                        isCustomizerOpen = true
-                    }
-                }
-            }
+            containerColor = Color.Transparent
         ) { paddingValues ->
             LazyColumn(
                 contentPadding = PaddingValues(
-                    top = paddingValues.calculateTopPadding(),
+                    top = paddingValues.calculateTopPadding() + 12.dp,
                     bottom = paddingValues.calculateBottomPadding() + 100.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
+                // PREMIUM MINIMAL TV LAUNCHER HEADHEADBAR (SCROLLABLE)
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 24.dp, end = 24.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "All Apps",
+                                color = Color.White,
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = FontFamily.SansSerif,
+                                letterSpacing = (-0.5).sp
+                            )
+                        }
+                        MinimalistTopClock(viewModel = viewModel) {
+                            isCustomizerOpen = true
+                        }
+                    }
+                }
+
                 // 1. SEARCH BOX
                 item {
                     SearchSection(
@@ -1228,61 +1294,146 @@ fun CinemaBillboard(appItem: AppItem, onClick: () -> Unit) {
     }
 }
 
-// INPUT SEARCH ROW
+// INPUT SEARCH ROW WITH DOUBLE-CLICK TO ACTIVATE TYPE SEARCH ON ANDROID TV
 @Composable
 fun SearchSection(query: String, onQueryChange: (String) -> Unit) {
+    var isEditing by remember { mutableStateOf(false) }
+    var lastClickTime by remember { mutableStateOf(0L) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(isEditing) {
+        if (isEditing) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
     ) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            placeholder = {
-                Text(
-                    text = "Search dynamic channels & installed applications...",
-                    color = FireTextSecondary,
-                    fontSize = 13.sp
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = FireOrangePrimary
-                )
-            },
-            trailingIcon = {
-                if (query.isNotEmpty()) {
-                    IconButton(
-                        onClick = { onQueryChange("") },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Clear Search",
-                            tint = FireTextSecondary
-                        )
+        if (!isEditing) {
+            var isBoxFocused by remember { mutableStateOf(false) }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { isBoxFocused = it.isFocused }
+                    .focusable()
+                    .clickable {
+                        val now = System.currentTimeMillis()
+                        if (now - lastClickTime < 800) {
+                            isEditing = true
+                        }
+                        lastClickTime = now
                     }
+                    .border(
+                        width = if (isBoxFocused) 2.5.dp else 1.dp,
+                        color = if (isBoxFocused) FireOrangePrimary else Color(0xFF202730),
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                    .background(
+                        color = if (isBoxFocused) Color(0xFF10141A) else Color(0xFF0C0F13),
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search Icon",
+                        tint = FireOrangePrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = if (query.isNotEmpty()) query else "Search apps (Double-click to type)...",
+                        color = if (query.isNotEmpty()) FireTextPrimary else FireTextSecondary,
+                        fontSize = 13.sp
+                    )
                 }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(28.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = FireTextPrimary,
-                unfocusedTextColor = FireTextPrimary,
-                focusedBorderColor = FireOrangePrimary,
-                unfocusedBorderColor = Color(0xFF202730),
-                focusedContainerColor = Color(0xFF10141A),
-                unfocusedContainerColor = Color(0xFF0C0F13)
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
+            }
+        } else {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                placeholder = {
+                    Text(
+                        text = "Search dynamic channels & installed applications...",
+                        color = FireTextSecondary,
+                        fontSize = 13.sp
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = FireOrangePrimary
+                    )
+                },
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (query.isNotEmpty()) {
+                            IconButton(
+                                onClick = { onQueryChange("") },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear Search",
+                                    tint = FireTextSecondary
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        IconButton(
+                            onClick = { isEditing = false },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Done",
+                                    tint = FireOrangePrimary
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(28.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = FireTextPrimary,
+                    unfocusedTextColor = FireTextPrimary,
+                    focusedBorderColor = FireOrangePrimary,
+                    unfocusedBorderColor = Color(0xFF202730),
+                    focusedContainerColor = Color(0xFF10141A),
+                    unfocusedContainerColor = Color(0xFF0C0F13)
+                ),
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        isEditing = false
+                        keyboardController?.hide()
+                    }
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged {
+                        if (!it.isFocused) {
+                            isEditing = false
+                        }
+                    }
+            )
+        }
     }
 }
 
-// HORIZONTAL CATEGORIES
+// HORIZONTAL CATEGORIES WITH HIGH VISIBILITY TV D-PAD FOCUS
 @Composable
 fun CategoryRow(selectedTab: String, onTabSelected: (String) -> Unit) {
     val tabs = listOf("All Apps", "Device Applications", "Favorites Hub")
@@ -1294,16 +1445,28 @@ fun CategoryRow(selectedTab: String, onTabSelected: (String) -> Unit) {
     ) {
         items(tabs) { tab ->
             val isSelected = selectedTab == tab
+            var isFocused by remember { mutableStateOf(false) }
+            val scale by animateFloatAsState(
+                targetValue = if (isFocused) 1.08f else 1.0f,
+                animationSpec = spring()
+            )
+
             Box(
                 modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .onFocusChanged { isFocused = it.isFocused }
+                    .focusable()
                     .clip(RoundedCornerShape(20.dp))
                     .border(
-                        width = 1.dp,
-                        color = if (isSelected) FireOrangePrimary else Color(0x3390A4AE),
+                        width = if (isFocused) 2.dp else 1.dp,
+                        color = if (isFocused) Color.White else if (isSelected) FireOrangePrimary else Color(0x3390A4AE),
                         shape = RoundedCornerShape(20.dp)
                     )
                     .background(
-                        color = if (isSelected) Color(0x1AFF6400) else Color.Transparent
+                        color = if (isFocused) Color(0x2BFFFFFF) else if (isSelected) Color(0x1AFF6400) else Color.Transparent
                     )
                     .clickable { onTabSelected(tab) }
                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -1317,15 +1480,15 @@ fun CategoryRow(selectedTab: String, onTabSelected: (String) -> Unit) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = if (isSelected) FireOrangePrimary else FireTextSecondary,
+                        tint = if (isFocused) Color.White else if (isSelected) FireOrangePrimary else FireTextSecondary,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = tab,
-                        color = if (isSelected) FireTextPrimary else FireTextSecondary,
+                        color = if (isFocused) Color.White else if (isSelected) FireTextPrimary else FireTextSecondary,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Normal
                     )
                 }
             }
