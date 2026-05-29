@@ -1,21 +1,53 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Launcher-For-TV
 
-# Run and deploy your AI Studio app
+Android TV launcher application built with Jetpack Compose.
 
-This contains everything you need to run your app locally.
+## Features
+- Android TV / Leanback launcher entrypoint
+- D-Pad friendly navigation and focus handling
+- Search and favorites for installed apps
+- Release APK publishing from GitHub Actions on every push
 
-View your app in AI Studio: https://ai.studio/apps/14f065df-1c81-4603-a29d-b6794a2cb4bc
+## Local development
+### Prerequisites
+- Android Studio (latest stable)
+- JDK 17
+- Android SDK + NDK (for JNI build)
 
-## Run Locally
+### Setup
+1. Open `/tmp/workspace/AnikethJana/Launcher-For-TV` in Android Studio.
+2. Create `.env` from `.env.example` and add `GEMINI_API_KEY`.
+3. Build and test with Gradle:
+   - `gradle testDebugUnitTest`
+   - `gradle assembleRelease`
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+## CI/CD workflow
+Workflow file: `.github/workflows/android-release.yml`
 
+On **every push**, the workflow:
+1. Runs unit tests.
+2. Builds the release APK.
+3. Uploads APK as a workflow artifact.
+4. Creates a GitHub Release and attaches the APK asset.
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
+## Signing secrets required in GitHub
+Add these repository secrets:
+- `KEYSTORE_PASSWORD`
+- `KEY_ALIAS`
+- `KEY_PASSWORD`
+- `KEYSTORE` (base64 encoded JKS)  
+  or `SIGNING_KEY` (base64 encoded JKS, fallback supported)
+
+The workflow decodes the keystore and passes:
+- `KEYSTORE_PASSWORD`
+- `KEY_ALIAS`
+- `KEY_PASSWORD`
+- `KEYSTORE_PATH`
+
+## JNI performance bridge
+Native bridge files:
+- `app/src/main/java/com/example/NativeStringMatcher.kt`
+- `app/src/main/cpp/native-utils.cpp`
+- `app/src/main/cpp/CMakeLists.txt`
+
+This bridge is used for faster case-insensitive matching during app filtering, with Kotlin fallback when native loading is unavailable.

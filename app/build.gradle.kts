@@ -21,6 +21,11 @@ android {
     ndk {
       abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a"))
     }
+    externalNativeBuild {
+      cmake {
+        cppFlags += "-O2 -std=c++17"
+      }
+    }
   }
 
   signingConfigs {
@@ -60,6 +65,11 @@ android {
   buildFeatures {
     compose = true
     buildConfig = true
+  }
+  externalNativeBuild {
+    cmake {
+      path = file("src/main/cpp/CMakeLists.txt")
+    }
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
@@ -125,4 +135,3 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
-
