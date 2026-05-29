@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -883,9 +884,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
     }
 
     val pinnedApps = remember(favorites, systemApps) {
-        val curatedPinnedIds = CuratedApps.filter { favorites.contains(it.id) }
-        val systemPinnedPkgs = systemApps.filter { favorites.contains(it.packageName) }
-        curatedPinnedIds + systemPinnedPkgs
+        systemApps.filter { favorites.contains(it.packageName) }
     }
 
     val filteredPinned = remember(searchQuery, pinnedApps, selectedTab) {
@@ -935,19 +934,12 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                 ) {
                     Column {
                         Text(
-                            text = "Your apps",
+                            text = "All Apps",
                             color = Color.White,
                             fontSize = 32.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = FontFamily.SansSerif,
                             letterSpacing = (-0.5).sp
-                        )
-                        Text(
-                            text = "GOOGLE TV REMOTE FRIENDLY APPLIST",
-                            color = FireOrangePrimary,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
                         )
                     }
                     MinimalistTopClock(viewModel = viewModel) {
@@ -996,17 +988,6 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                         AppHorizontalGroup(
                             title = "YOUR QUICK ACCESS SHORTCUTS",
                             apps = filteredPinned,
-                            favorites = favorites,
-                            onAppClick = { viewModel.selectApp(it) }
-                        )
-                    }
-                }
-
-                if (filteredCurated.isNotEmpty() && (selectedTab == "All Apps" || selectedTab == "Streaming Channels")) {
-                    item {
-                        AppHorizontalGroup(
-                            title = "STREAMING & ENTERTAINMENT",
-                            apps = filteredCurated,
                             favorites = favorites,
                             onAppClick = { viewModel.selectApp(it) }
                         )
@@ -1304,7 +1285,7 @@ fun SearchSection(query: String, onQueryChange: (String) -> Unit) {
 // HORIZONTAL CATEGORIES
 @Composable
 fun CategoryRow(selectedTab: String, onTabSelected: (String) -> Unit) {
-    val tabs = listOf("All Apps", "Streaming Channels", "Device Applications", "Favorites Hub")
+    val tabs = listOf("All Apps", "Device Applications", "Favorites Hub")
 
     LazyRow(
         contentPadding = PaddingValues(horizontal = 20.dp),
@@ -1330,7 +1311,6 @@ fun CategoryRow(selectedTab: String, onTabSelected: (String) -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val icon = when (tab) {
                         "All Apps" -> Icons.Default.List
-                        "Streaming Channels" -> Icons.Default.Star
                         "Device Applications" -> Icons.Default.Settings
                         else -> Icons.Default.Favorite
                     }
@@ -1495,9 +1475,11 @@ fun AppCircularHubCard(
             color = if (isFocused) Color.White else FireTextSecondary,
             fontSize = 11.sp,
             fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            lineHeight = 13.sp
+            textAlign = TextAlign.Center,
+            lineHeight = 13.sp,
+            modifier = Modifier.padding(horizontal = 4.dp)
         )
     }
 }
