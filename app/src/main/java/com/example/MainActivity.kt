@@ -188,21 +188,25 @@ object AppCategoryClassifier {
 
             // API 26+ Application Category check
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                val cat = appInfo.category
-                val mapped = when (cat) {
-                    android.content.pm.ApplicationInfo.CATEGORY_GAME -> "Games"
-                    android.content.pm.ApplicationInfo.CATEGORY_AUDIO -> "Entertainment"
-                    android.content.pm.ApplicationInfo.CATEGORY_VIDEO -> "Entertainment"
-                    android.content.pm.ApplicationInfo.CATEGORY_IMAGE -> "Entertainment"
-                    android.content.pm.ApplicationInfo.CATEGORY_SOCIAL -> "Social"
-                    android.content.pm.ApplicationInfo.CATEGORY_NEWS -> "Entertainment"
-                    android.content.pm.ApplicationInfo.CATEGORY_MAPS -> "Utilities"
-                    android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
-                    // Accessibility is 8 in API 31+
-                    8 -> "Utilities"
-                    else -> null
+                try {
+                    val cat = appInfo.category
+                    val mapped = when (cat) {
+                        android.content.pm.ApplicationInfo.CATEGORY_GAME -> "Games"
+                        android.content.pm.ApplicationInfo.CATEGORY_AUDIO -> "Entertainment"
+                        android.content.pm.ApplicationInfo.CATEGORY_VIDEO -> "Entertainment"
+                        android.content.pm.ApplicationInfo.CATEGORY_IMAGE -> "Entertainment"
+                        android.content.pm.ApplicationInfo.CATEGORY_SOCIAL -> "Social"
+                        android.content.pm.ApplicationInfo.CATEGORY_NEWS -> "Entertainment"
+                        android.content.pm.ApplicationInfo.CATEGORY_MAPS -> "Utilities"
+                        android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
+                        // Accessibility is 8 in API 31+
+                        8 -> "Utilities"
+                        else -> null
+                    }
+                    if (mapped != null) return mapped
+                } catch (t: Throwable) {
+                    // Fallback on any runtime linkage/compat issues
                 }
-                if (mapped != null) return mapped
             }
         }
 
@@ -333,7 +337,9 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
             "Utilities" -> listOf(Color(0xFFF1C40F), Color(0xFFF39C12), Color(0xFFD35400))
             else -> listOf(Color(0xFF7F8C8D), Color(0xFF95A5A6), Color(0xFF34495E))
         }
-        return colors[name.hashCode().absoluteValue % colors.size]
+        val safeHash = name.hashCode().toLong() and 0xFFFFFFFFL
+        val index = (safeHash % colors.size).toInt()
+        return colors[index]
     }
 
     private fun loadSystemApps() {
@@ -394,7 +400,7 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
                         launchIntent = launchIntent,
                         iconDrawable = icon
                     )
-                }.sortedBy { it.name.lowercase() }
+                }.distinctBy { it.packageName }.sortedBy { it.name.lowercase() }
             }
             _systemApps.value = apps
         }
@@ -1114,8 +1120,13 @@ fun AppIcon(app: AppItem, modifier: Modifier = Modifier) {
                 factory = { context ->
                     ImageView(context).apply {
                         scaleType = ImageView.ScaleType.FIT_CENTER
-                        setImageDrawable(app.iconDrawable)
+                        val cloned = app.iconDrawable?.constantState?.newDrawable(context.resources) ?: app.iconDrawable
+                        setImageDrawable(cloned)
                     }
+                },
+                update = { imageView ->
+                    val cloned = app.iconDrawable?.constantState?.newDrawable(imageView.context.resources) ?: app.iconDrawable
+                    imageView.setImageDrawable(cloned)
                 },
                 modifier = modifier.padding(10.dp)
             )
