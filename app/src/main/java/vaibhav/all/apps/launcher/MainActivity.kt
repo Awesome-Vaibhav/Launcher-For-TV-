@@ -1201,6 +1201,75 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                             .fillMaxWidth()
                             .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
                     ) {
+                        // Top-Left Navigation Buttons (Glass Design)
+                        Row(
+                            modifier = Modifier.align(Alignment.CenterStart),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            var isBackFocused by remember { mutableStateOf(false) }
+                            var isHomeFocused by remember { mutableStateOf(false) }
+                            
+                            // Back Button
+                            IconButton(
+                                onClick = { 
+                                    // Simulate back button press - closes dialogs or exits app
+                                    (context as? ComponentActivity)?.onBackPressedDispatcher?.onBackPressed()
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .onFocusChanged { isBackFocused = it.isFocused }
+                                    .focusable(enabled = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null && rearrangingApp == null)
+                                    .border(
+                                        width = if (isBackFocused) 1.5.dp else 1.dp,
+                                        color = if (isBackFocused) Color.White else Color(0x1FFFFFFF),
+                                        shape = CircleShape
+                                    )
+                                    .background(
+                                        color = if (isBackFocused) Color(0x11FFFFFF) else Color(0x05FFFFFF),
+                                        shape = CircleShape
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = if (isBackFocused) Color.White else FireOrangePrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            
+                            // Home Button - Returns to launcher home (closes any open dialogs/overlays)
+                            IconButton(
+                                onClick = { 
+                                    // Close all overlays and return to main launcher view
+                                    isDeveloperInfoOpen = false
+                                    isCustomizerOpen = false
+                                    appToEdit = null
+                                    rearrangingApp = null
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .onFocusChanged { isHomeFocused = it.isFocused }
+                                    .focusable(enabled = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null && rearrangingApp == null)
+                                    .border(
+                                        width = if (isHomeFocused) 1.5.dp else 1.dp,
+                                        color = if (isHomeFocused) Color.White else Color(0x1FFFFFFF),
+                                        shape = CircleShape
+                                    )
+                                    .background(
+                                        color = if (isHomeFocused) Color(0x11FFFFFF) else Color(0x05FFFFFF),
+                                        shape = CircleShape
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = "Home",
+                                    tint = if (isHomeFocused) Color.White else FireOrangePrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        
                         // Centered "Your apps" Title
                         Text(
                             text = "Your apps",
