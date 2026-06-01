@@ -2,13 +2,8 @@ name: Android CI Release
 
 on:
   push:
-    branches:
-      - main
-      - master
-  pull_request:
-    branches:
-      - main
-      - master
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -59,11 +54,8 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
 
       - name: Create release with APK
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}-build-${{ github.run_attempt }}
-          name: Release Build ${{ github.run_number }}.${{ github.run_attempt }}
-          target_commitish: ${{ github.sha }}
+          name: Release ${{ github.ref_name }}
           generate_release_notes: true
           files: app/build/outputs/apk/release/*.apk
