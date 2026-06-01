@@ -60,6 +60,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.example.ui.theme.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -670,6 +674,9 @@ fun CalendarTimeCustomizerOverlay(
     viewModel: FireAppsViewModel,
     onClose: () -> Unit
 ) {
+    BackHandler(enabled = true) {
+        onClose()
+    }
     val useSystemTime by viewModel.useSystemTime.collectAsState()
     val is24h by viewModel.timeFormat24h.collectAsState()
 
@@ -720,6 +727,7 @@ fun CalendarTimeCustomizerOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -981,6 +989,9 @@ fun AppOptionsDialog(
     onStartRearranging: () -> Unit,
     onClose: () -> Unit
 ) {
+    BackHandler(enabled = true) {
+        onClose()
+    }
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -1009,6 +1020,7 @@ fun AppOptionsDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1143,10 +1155,32 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
     val selectedApp by viewModel.selectedApp.collectAsState()
     val isStreamingActive by viewModel.isStreamingFeedActive.collectAsState()
 
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp
+    // Each app is 96.dp wide + 16.dp spacing = 112.dp. Side padding totals 48.dp
+    val columnsCount = ((screenWidth - 48) / 112).coerceIn(3, 8)
+
     var isDeveloperInfoOpen by remember { mutableStateOf(false) }
     var isCustomizerOpen by remember { mutableStateOf(false) }
     var appToEdit by remember { mutableStateOf<AppItem?>(null) }
     var rearrangingApp by remember { mutableStateOf<AppItem?>(null) }
+
+    BackHandler(
+        enabled = isCustomizerOpen || isDeveloperInfoOpen || appToEdit != null || rearrangingApp != null || isStreamingActive
+    ) {
+        if (isCustomizerOpen) {
+            isCustomizerOpen = false
+        } else if (isDeveloperInfoOpen) {
+            isDeveloperInfoOpen = false
+        } else if (appToEdit != null) {
+            appToEdit = null
+        } else if (rearrangingApp != null) {
+            rearrangingApp = null
+        } else if (isStreamingActive) {
+            viewModel.setStreamingFeed(false)
+            viewModel.selectApp(null)
+        }
+    }
 
     // Direct app launching logic with 1-click fallback
     val launchAppDirectly = { app: AppItem ->
@@ -1192,27 +1226,27 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // TV CENTERED TITLE AND ACTION ROW (MATCHING USER REDESIGN IMAGE)
+                // TV FLEXIBLE HEADER AND ACTION ROW (SECURE COMPATIBILITY PREVENTING CUT-OFF WORD OVERLAPPING ON MOBILE/TV)
                 item {
-                    Box(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
+                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Centered "Your apps" Title
+                        // "Your apps" Title
                         Text(
                             text = "Your apps",
                             color = Color.White,
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Normal,
                             fontFamily = FontFamily.SansSerif,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.align(Alignment.Center)
+                            textAlign = TextAlign.Start
                         )
 
-                        // Top-Right Discrete Remote-friendly actions
+                        // Top-Right Discrete remote-friendly actions
                         Row(
-                            modifier = Modifier.align(Alignment.CenterEnd),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
@@ -1269,6 +1303,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
+                                contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 items(favApps, key = { it.packageName }) { app ->
@@ -1300,8 +1335,8 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                     }
                 }
 
-                // UNIFIED FLAT GRID of all INSTALLED apps (8 columns to perfectly fit TV screen width)
-                val chunkedApps = allApps.chunked(8)
+                // DYNAMIC ADAPTIVE GRID scaling according to actual screen width (prevents cuts on mobiles, tablets, or TV displays)
+                val chunkedApps = allApps.chunked(columnsCount)
 
                 if (allApps.isEmpty()) {
                     item {
@@ -1314,7 +1349,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 6.dp),
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -1328,7 +1363,8 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                                     isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null && (rearrangingApp == null || rearrangingApp?.packageName == app.packageName),
                                     rearrangingApp = rearrangingApp,
                                     onMoveApp = { offset -> viewModel.moveApp(app.packageName, offset) },
-                                    onFinishRearranging = { rearrangingApp = null }
+                                    onFinishRearranging = { rearrangingApp = null },
+                                    columnsCount = columnsCount
                                 )
                             }
                         }
@@ -1417,7 +1453,10 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                 appItem = app,
                 isFavorite = isPinned,
                 onToggleFavorite = { viewModel.toggleFavorite(app.packageName) },
-                onStartRearranging = { rearrangingApp = app },
+                onStartRearranging = {
+                    rearrangingApp = app
+                    appToEdit = null
+                },
                 onClose = { appToEdit = null }
             )
         }
@@ -1429,6 +1468,9 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
 fun DeveloperInfoOverlay(
     onClose: () -> Unit
 ) {
+    BackHandler(enabled = true) {
+        onClose()
+    }
     val context = LocalContext.current
     var isCloseFocused by remember { mutableStateOf(false) }
     var isTelegramFocused by remember { mutableStateOf(false) }
@@ -1460,6 +1502,7 @@ fun DeveloperInfoOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1985,7 +2028,8 @@ fun AppCircularHubCard(
     isFocusable: Boolean = true,
     rearrangingApp: AppItem? = null,
     onMoveApp: (Int) -> Unit = {},
-    onFinishRearranging: () -> Unit = {}
+    onFinishRearranging: () -> Unit = {},
+    columnsCount: Int = 8
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val isRearranging = rearrangingApp?.packageName == appItem.packageName
@@ -2021,11 +2065,11 @@ fun AppCircularHubCard(
                                 true
                             }
                             KeyEvent.KEYCODE_DPAD_UP -> {
-                                onMoveApp(-8)
+                                onMoveApp(-columnsCount)
                                 true
                             }
                             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                onMoveApp(8)
+                                onMoveApp(columnsCount)
                                 true
                             }
                             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BACK -> {
@@ -2669,6 +2713,9 @@ fun AppDetailOverlay(
 // FULLSCREEN CINEMATIC FEED SIMULATOR
 @Composable
 fun CinemaFeedPlayer(app: AppItem, onClose: () -> Unit) {
+    BackHandler(enabled = true) {
+        onClose()
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "audio_visualizer")
     val heights = (0..11).map { index ->
         infiniteTransition.animateFloat(
@@ -2703,8 +2750,9 @@ fun CinemaFeedPlayer(app: AppItem, onClose: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
@@ -2748,22 +2796,24 @@ fun CinemaFeedPlayer(app: AppItem, onClose: () -> Unit) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.weight(1f).wrapContentHeight()
+                modifier = Modifier.wrapContentHeight()
             ) {
                 Text(
                     text = app.name,
                     color = Color.White,
                     fontSize = 32.sp,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
                 )
                 Text(
                     text = app.mockShow,
                     color = FireAmberAccent,
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
                     modifier = Modifier
@@ -2791,12 +2841,13 @@ fun CinemaFeedPlayer(app: AppItem, onClose: () -> Unit) {
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = "Streaming broadcast feeds buffer simulation active at 60 FPS...",
                     color = FireTextSecondary,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
                 )
             }
 
