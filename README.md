@@ -45,7 +45,7 @@ The workflow decodes the keystore and passes:
 
 ## JNI performance bridge
 Native bridge files:
-- `app/src/main/java/com/example/NativeStringMatcher.kt`
+- `app/src/main/java/vaibhav/all/apps/launcher/NativeStringMatcher.kt`
 - `app/src/main/cpp/native-utils.cpp`
 - `app/src/main/cpp/CMakeLists.txt`
 

@@ -1,4 +1,4 @@
-package com.example
+package vaibhav.all.apps.launcher
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

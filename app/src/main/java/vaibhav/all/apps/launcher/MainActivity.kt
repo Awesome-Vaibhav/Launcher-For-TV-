@@ -1,4 +1,4 @@
-package com.example
+package vaibhav.all.apps.launcher
 
 import android.content.Context
 import android.content.Intent
@@ -66,7 +66,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
 import android.widget.Toast
-import com.example.ui.theme.*
+import vaibhav.all.apps.launcher.ui.theme.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -1170,6 +1170,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
     }
 
     val allApps = filteredSystem
+    val chunkedApps = remember(allApps) { allApps.chunked(8) }
 
     // FAVORITE APPS ROW (ONLY SHOWS IF NOT EMPTY, COOPERATES WITH REAL-TIME FACTION LISTS)
     val favApps = remember(favorites, systemApps) {
@@ -1302,7 +1303,6 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                 }
 
                 // UNIFIED FLAT GRID of all INSTALLED apps (8 columns to perfectly fit TV screen width)
-                val chunkedApps = remember(allApps) { allApps.chunked(8) }
 
                 if (allApps.isEmpty()) {
                     item {
@@ -2555,7 +2555,7 @@ fun AppDetailOverlay(
                     }
                 }
 
-                Divider(color = Color(0x11FFFFFF))
+                HorizontalDivider(color = Color(0x11FFFFFF))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -2610,7 +2610,7 @@ fun AppDetailOverlay(
                     }
                 }
 
-                Divider(color = Color(0x11FFFFFF))
+                HorizontalDivider(color = Color(0x11FFFFFF))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

@@ -14,7 +14,7 @@ std::string ToLowerAscii(std::string value) {
 
 extern "C"
 JNIEXPORT jboolean JNICALL
-Java_com_example_NativeStringMatcher_containsIgnoreCaseNative(
+Java_vaibhav_all_apps_launcher_NativeStringMatcher_containsIgnoreCaseNative(
         JNIEnv* env,
         jobject /* thiz */,
         jstring text,
