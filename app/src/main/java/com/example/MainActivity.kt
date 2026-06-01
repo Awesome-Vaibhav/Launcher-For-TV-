@@ -55,8 +55,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
 import android.widget.Toast
@@ -311,7 +317,6 @@ object AppCategoryClassifier {
 // STATE CONTROLLER ViewModel
 class FireAppsViewModel(private val context: Context) : ViewModel() {
     private val sharedPrefs = context.getSharedPreferences("fire_apps_preferences", Context.MODE_PRIVATE)
-    private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -451,7 +456,7 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
     }
 
     private fun loadSystemApps() {
-        coroutineScope.launch {
+        viewModelScope.launch {
             val apps = withContext(Dispatchers.IO) {
                 val pm = context.packageManager
                 val intent = Intent(Intent.ACTION_MAIN, null).apply {
@@ -540,10 +545,6 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
         _isStreamingFeedActive.value = active
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        coroutineScope.cancel()
-    }
 }
 
 // MAIN ACTIVITY GATEWAY
@@ -642,7 +643,7 @@ fun MinimalistTopClock(
         ) {
             Icon(
                 imageVector = Icons.Default.DateRange,
-                contentDescription = null,
+                contentDescription = "Date and time",
                 tint = if (isFocused) Color.White else FireOrangePrimary,
                 modifier = Modifier.size(14.dp)
             )
@@ -731,7 +732,7 @@ fun CalendarTimeCustomizerOverlay(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = null,
+                            contentDescription = "Time and date settings",
                             tint = FireOrangePrimary,
                             modifier = Modifier.size(22.dp)
                         )
@@ -1072,7 +1073,7 @@ fun AppOptionsDialog(
                     val iconVector = if (isFavorite) Icons.Default.FavoriteBorder else Icons.Default.Favorite
                     Icon(
                         imageVector = iconVector,
-                        contentDescription = null,
+                        contentDescription = label,
                         modifier = Modifier.padding(end = 8.dp).size(16.dp)
                     )
                     Text(text = label, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -1100,7 +1101,7 @@ fun AppOptionsDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Menu,
-                        contentDescription = null,
+                        contentDescription = "Move app",
                         modifier = Modifier.padding(end = 8.dp).size(16.dp)
                     )
                     Text(text = "Move / Rearrange App", fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -1163,8 +1164,8 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
 
     val filteredSystem = remember(searchQuery, systemApps) {
         systemApps.filter {
-            it.name.contains(searchQuery, ignoreCase = true) ||
-                    it.packageName.contains(searchQuery, ignoreCase = true)
+            NativeStringMatcher.containsIgnoreCase(it.name, searchQuery) ||
+                    NativeStringMatcher.containsIgnoreCase(it.packageName, searchQuery)
         }
     }
 
@@ -1301,7 +1302,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                 }
 
                 // UNIFIED FLAT GRID of all INSTALLED apps (8 columns to perfectly fit TV screen width)
-                val chunkedApps = allApps.chunked(8)
+                val chunkedApps = remember(allApps) { allApps.chunked(8) }
 
                 if (allApps.isEmpty()) {
                     item {
@@ -1310,7 +1311,10 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                         }
                     }
                 } else {
-                    items(chunkedApps) { rowApps ->
+                    items(
+                        items = chunkedApps,
+                        key = { rowApps -> rowApps.joinToString(separator = "|") { app -> app.packageName } }
+                    ) { rowApps ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1359,7 +1363,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                     ) {
                         Icon(
                             imageVector = Icons.Default.Menu,
-                            contentDescription = null,
+                            contentDescription = "Move mode active",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
@@ -1472,7 +1476,7 @@ fun DeveloperInfoOverlay(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Info,
-                        contentDescription = null,
+                        contentDescription = "Launcher information",
                         tint = FireOrangePrimary,
                         modifier = Modifier.size(32.dp)
                     )
@@ -1794,7 +1798,7 @@ fun SearchSection(query: String, onQueryChange: (String) -> Unit, isFocusable: B
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = null,
+                        contentDescription = "Search",
                         tint = FireOrangePrimary
                     )
                 },
@@ -1903,7 +1907,7 @@ fun CategoryRow(selectedTab: String, onTabSelected: (String) -> Unit, isFocusabl
                     }
                     Icon(
                         imageVector = icon,
-                        contentDescription = null,
+                        contentDescription = tab,
                         tint = if (isFocused) Color.White else if (isSelected) FireOrangePrimary else FireTextSecondary,
                         modifier = Modifier.size(14.dp)
                     )
@@ -2008,6 +2012,15 @@ fun AppCircularHubCard(
                 }
             }
             .focusable(enabled = isFocusable)
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = appItem.name
+                stateDescription = when {
+                    isRearranging -> "Move mode active"
+                    isPinned -> "Pinned app"
+                    else -> "Press to open. Long press for options."
+                }
+            }
             .onKeyEvent { keyEvent ->
                 if (isRearranging) {
                     if (keyEvent.type == KeyEventType.KeyDown) {
@@ -2182,24 +2195,24 @@ fun AppCircularHubCard(
 fun AppIcon(app: AppItem, modifier: Modifier = Modifier) {
     if (app.isSystem) {
         if (app.iconDrawable != null) {
+            val resources = LocalContext.current.resources
+            val drawable = remember(app.iconDrawable, resources.configuration) {
+                app.iconDrawable?.constantState?.newDrawable(resources)?.mutate() ?: app.iconDrawable
+            }
             AndroidView(
                 factory = { context ->
                     ImageView(context).apply {
                         scaleType = ImageView.ScaleType.FIT_CENTER
-                        val cloned = app.iconDrawable?.constantState?.newDrawable(context.resources) ?: app.iconDrawable
-                        setImageDrawable(cloned)
+                        setImageDrawable(drawable)
                     }
                 },
-                update = { imageView ->
-                    val cloned = app.iconDrawable?.constantState?.newDrawable(imageView.context.resources) ?: app.iconDrawable
-                    imageView.setImageDrawable(cloned)
-                },
+                update = { imageView -> imageView.setImageDrawable(drawable) },
                 modifier = modifier.padding(10.dp)
             )
         } else {
             Icon(
                 imageVector = Icons.Default.Settings,
-                contentDescription = null,
+                contentDescription = "App icon placeholder",
                 tint = FireOrangePrimary,
                 modifier = modifier.size(32.dp)
             )
@@ -2446,7 +2459,7 @@ fun EmptyStatePanel(query: String, onReset: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
-                contentDescription = null,
+                contentDescription = "No results",
                 tint = FireTextSecondary,
                 modifier = Modifier.size(54.dp)
             )
@@ -2615,7 +2628,7 @@ fun AppDetailOverlay(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = if (isFavorited) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = null,
+                                contentDescription = if (isFavorited) "Remove favorite" else "Add favorite",
                                 tint = if (isFavorited) FireOrangePrimary else Color.White,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -2645,7 +2658,7 @@ fun AppDetailOverlay(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = if (app.isSystem) Icons.Default.ExitToApp else Icons.Default.PlayArrow,
-                                contentDescription = null,
+                                contentDescription = if (app.isSystem) "Open app" else "Play content",
                                 tint = if (isClickable) Color.Black else FireTextMuted,
                                 modifier = Modifier.size(18.dp)
                             )
