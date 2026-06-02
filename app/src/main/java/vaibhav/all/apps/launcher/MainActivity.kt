@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -469,7 +470,11 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
                     if (pName == context.packageName) return@mapNotNull null
                     val name = info.loadLabel(pm)?.toString() ?: pName
                     val icon = info.loadIcon(pm)
-                    val launchIntent = pm.getLaunchIntentForPackage(pName)
+                    val launchIntent = Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_LAUNCHER)
+                        component = android.content.ComponentName(pName, activityInfo.name)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                    }
                     val appInfo = activityInfo.applicationInfo
                     
                     val detectedCategory = AppCategoryClassifier.getCategory(pName, name, appInfo)
@@ -2265,7 +2270,8 @@ fun AppIcon(app: AppItem, modifier: Modifier = Modifier) {
     if (app.isSystem) {
         if (app.iconDrawable != null) {
             val resources = LocalContext.current.resources
-            val drawable = remember(app.iconDrawable, resources.configuration) {
+            val configuration = LocalConfiguration.current
+            val drawable = remember(app.iconDrawable, configuration) {
                 app.iconDrawable?.constantState?.newDrawable(resources)?.mutate() ?: app.iconDrawable
             }
             AndroidView(
