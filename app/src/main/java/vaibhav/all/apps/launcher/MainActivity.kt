@@ -315,6 +315,13 @@ object AppCategoryClassifier {
     }
 }
 
+private val SPECS_GAMES = listOf("INTERACTIVE", "LOCAL GAME", "60 FPS")
+private val SPECS_PRODUCTIVITY = listOf("WORKSPACE", "PRODUCTIVITY", "CLOUD DATA")
+private val SPECS_SOCIAL = listOf("SOCIAL", "MESSAGING", "COMMUNITY")
+private val SPECS_ENTERTAINMENT = listOf("CINEMATIC", "MEDIA FEED", "UHD/HD")
+private val SPECS_UTILITIES = listOf("CORE UTILITY", "SYSTEM RUNTIME")
+private val SPECS_OTHER = listOf("DEVICE SERVICE", "LOCAL SHORTCUT")
+
 // STATE CONTROLLER ViewModel
 class FireAppsViewModel(private val context: Context) : ViewModel() {
     private val sharedPrefs = context.getSharedPreferences("fire_apps_preferences", Context.MODE_PRIVATE)
@@ -480,12 +487,12 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
                     val detectedCategory = AppCategoryClassifier.getCategory(pName, name, appInfo)
                     
                     val specs = when (detectedCategory) {
-                        "Games" -> listOf("INTERACTIVE", "LOCAL GAME", "60 FPS")
-                        "Productivity" -> listOf("WORKSPACE", "PRODUCTIVITY", "CLOUD DATA")
-                        "Social" -> listOf("SOCIAL", "MESSAGING", "COMMUNITY")
-                        "Entertainment" -> listOf("CINEMATIC", "MEDIA FEED", "UHD/HD")
-                        "Utilities" -> listOf("CORE UTILITY", "SYSTEM RUNTIME")
-                        else -> listOf("DEVICE SERVICE", "LOCAL SHORTCUT")
+                        "Games" -> SPECS_GAMES
+                        "Productivity" -> SPECS_PRODUCTIVITY
+                        "Social" -> SPECS_SOCIAL
+                        "Entertainment" -> SPECS_ENTERTAINMENT
+                        "Utilities" -> SPECS_UTILITIES
+                        else -> SPECS_OTHER
                     }
                     val description = when (detectedCategory) {
                         "Games" -> "Immersive gameplay application installed on this device. Start playing with zero buffering."
