@@ -44,18 +44,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -322,7 +322,12 @@ object AppCategoryClassifier {
     ): String {
         // Priority 1: Check system game flag
         if (appInfo != null) {
-            val isGame = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_IS_GAME) != 0
+            val isGame = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                appInfo.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
+            } else {
+                @Suppress("DEPRECATION")
+                (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_IS_GAME) != 0
+            }
             if (isGame) return "Games"
             
             // Priority 2: Check system category (API 26+)
@@ -507,12 +512,12 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
                 val intent = Intent(Intent.ACTION_MAIN, null).apply {
                     addCategory(Intent.CATEGORY_LAUNCHER)
                 }
-                val resolveInfos = pm.queryIntentActivities(intent, 0) ?: emptyList()
+                val resolveInfos = pm.queryIntentActivities(intent, 0)
                 val parsed = resolveInfos.mapNotNull { info ->
                     val activityInfo = info?.activityInfo ?: return@mapNotNull null
                     val pName = activityInfo.packageName ?: return@mapNotNull null
                     if (pName == context.packageName) return@mapNotNull null
-                    val name = info.loadLabel(pm)?.toString() ?: pName
+                    val name = info.loadLabel(pm).toString().takeIf { it.isNotBlank() } ?: pName
                     val icon = info.loadIcon(pm)
                     val launchIntent = Intent(Intent.ACTION_MAIN).apply {
                         addCategory(Intent.CATEGORY_LAUNCHER)
@@ -982,7 +987,7 @@ fun AdjustmentRow(
                         shape = CircleShape
                     )
             ) {
-                Icon(imageVector = Icons.Default.KeyboardArrowLeft, contentDescription = "Decrement", modifier = Modifier.size(18.dp))
+                Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Decrement", modifier = Modifier.size(18.dp))
             }
             Box(
                 modifier = Modifier.width(54.dp),
@@ -1012,7 +1017,7 @@ fun AdjustmentRow(
                         shape = CircleShape
                     )
             ) {
-                Icon(imageVector = Icons.Default.KeyboardArrowRight, contentDescription = "Increment", modifier = Modifier.size(18.dp))
+                Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Increment", modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -1281,7 +1286,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                                     )
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.ArrowBack,
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Back",
                                     tint = if (isBackFocused) Color.White else FireOrangePrimary,
                                     modifier = Modifier.size(16.dp)
@@ -1835,7 +1840,7 @@ fun CategoryRow(selectedTab: String, onTabSelected: (String) -> Unit, isFocusabl
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val icon = when (tab) {
-                        "All Apps" -> Icons.Default.List
+                        "All Apps" -> Icons.AutoMirrored.Filled.List
                         "Device Applications" -> Icons.Default.Settings
                         else -> Icons.Default.Favorite
                     }
@@ -2132,7 +2137,7 @@ fun AppIcon(app: AppItem, modifier: Modifier = Modifier) {
             val resources = LocalContext.current.resources
             val configuration = LocalConfiguration.current
             val drawable = remember(app.iconDrawable, configuration) {
-                app.iconDrawable?.constantState?.newDrawable(resources)?.mutate() ?: app.iconDrawable
+                app.iconDrawable.constantState?.newDrawable(resources)?.mutate() ?: app.iconDrawable
             }
             AndroidView(
                 factory = { context ->
@@ -2592,7 +2597,7 @@ fun AppDetailOverlay(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = if (app.isSystem) Icons.Default.ExitToApp else Icons.Default.PlayArrow,
+                                imageVector = if (app.isSystem) Icons.AutoMirrored.Filled.ExitToApp else Icons.Default.PlayArrow,
                                 contentDescription = if (app.isSystem) "Open app" else "Play content",
                                 tint = if (isClickable) Color.Black else FireTextMuted,
                                 modifier = Modifier.size(18.dp)
@@ -2768,7 +2773,7 @@ fun CinemaFeedPlayer(app: AppItem, onClose: () -> Unit) {
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Rewind Simulation",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
@@ -2792,7 +2797,7 @@ fun CinemaFeedPlayer(app: AppItem, onClose: () -> Unit) {
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ArrowForward,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Forward Simulation",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
