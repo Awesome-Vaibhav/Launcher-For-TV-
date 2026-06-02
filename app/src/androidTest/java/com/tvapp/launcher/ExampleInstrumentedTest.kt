@@ -1,4 +1,4 @@
-package vaibhav.all.apps.launcher
+package com.tvapp.launcher
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry

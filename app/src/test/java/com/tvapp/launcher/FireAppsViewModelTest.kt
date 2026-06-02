@@ -1,4 +1,4 @@
-package vaibhav.all.apps.launcher
+package com.tvapp.launcher
 
 import android.content.Context
 import android.os.Build

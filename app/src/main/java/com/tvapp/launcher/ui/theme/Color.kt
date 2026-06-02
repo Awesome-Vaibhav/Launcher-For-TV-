@@ -1,4 +1,4 @@
-package vaibhav.all.apps.launcher.ui.theme
+package com.tvapp.launcher.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

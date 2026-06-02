@@ -1,4 +1,4 @@
-package vaibhav.all.apps.launcher
+package com.tvapp.launcher
 
 import android.content.pm.ApplicationInfo
 import org.junit.Assert.*

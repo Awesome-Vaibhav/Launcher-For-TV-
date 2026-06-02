@@ -1,4 +1,4 @@
-package vaibhav.all.apps.launcher
+package com.tvapp.launcher
 
 import androidx.compose.ui.graphics.Color
 import org.junit.Assert.*

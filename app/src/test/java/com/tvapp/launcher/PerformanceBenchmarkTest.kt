@@ -1,4 +1,4 @@
-package vaibhav.all.apps.launcher
+package com.tvapp.launcher
 
 import org.junit.Test
 import kotlin.system.measureTimeMillis

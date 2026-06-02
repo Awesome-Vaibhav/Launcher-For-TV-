@@ -1,4 +1,4 @@
-package vaibhav.all.apps.launcher
+package com.tvapp.launcher
 
 import android.content.Context
 import android.content.Intent
@@ -36,7 +36,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
@@ -66,12 +65,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
-import vaibhav.all.apps.launcher.ui.theme.*
+import com.tvapp.launcher.ui.theme.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlin.math.absoluteValue
 
 // DATA MODEL representation
 data class AppItem(
@@ -211,106 +210,100 @@ val CuratedApps = listOf(
 
 // APP CATEGORY AUTOMATIC DETECTION UTILITY
 object AppCategoryClassifier {
-    fun getCategory(packageName: String, label: String, appInfo: android.content.pm.ApplicationInfo?): String {
+    
+    // Category keyword mapping for cleaner matching
+    private val categoryKeywords = mapOf(
+        "Games" to listOf(
+            "game", "arcade", "playgames", "puzzle", "retroarch", "steam", "xbox"
+        ),
+        "Productivity" to listOf(
+            "productivity", "office", "word", "excel", "sheet", "slide", 
+            "calendar", "mail", "gmail", "notes", "document", "pdf", "editor", "print"
+        ),
+        "Social" to listOf(
+            "social", "chat", "messenger", "whatsapp", "instagram", "facebook", 
+            "twitter", "discord", "reddit", "linkedin", "tiktok", "snapchat", 
+            "telegram", "hangouts", "contacts", "telephony", "contact"
+        ),
+        "Entertainment" to listOf(
+            "netflix", "youtube", "disney", "hbo", "spotify", "player", 
+            "video", "tv", "music", "prime", "twitch", "stream", "cinema", 
+            "movie", "audio", "sound", "gallery", "photos", "podcast"
+        ),
+        "Utilities" to listOf(
+            "settings", "system", "tool", "utility", "manager", "calculator", 
+            "clock", "weather", "map", "navigation", "files", "download", 
+            "installer", "backup", "cleaner", "assistant", "chrome", "browser", 
+            "vending", "launcher", "provider", "search", "updater"
+        )
+    )
+    
+    /**
+     * Checks if the given text contains any of the keywords
+     */
+    private fun matchesAnyKeyword(text: String, keywords: List<String>): Boolean {
+        return keywords.any { text.contains(it, ignoreCase = true) }
+    }
+    
+    /**
+     * Maps Android ApplicationInfo category to our category names
+     */
+    private fun mapSystemCategory(categoryId: Int): String? {
+        return when (categoryId) {
+            android.content.pm.ApplicationInfo.CATEGORY_GAME -> "Games"
+            android.content.pm.ApplicationInfo.CATEGORY_AUDIO -> "Entertainment"
+            android.content.pm.ApplicationInfo.CATEGORY_VIDEO -> "Entertainment"
+            android.content.pm.ApplicationInfo.CATEGORY_IMAGE -> "Entertainment"
+            android.content.pm.ApplicationInfo.CATEGORY_SOCIAL -> "Social"
+            android.content.pm.ApplicationInfo.CATEGORY_NEWS -> "Entertainment"
+            android.content.pm.ApplicationInfo.CATEGORY_MAPS -> "Utilities"
+            android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
+            8 -> "Utilities" // Accessibility category in API 31+
+            else -> null
+        }
+    }
+    
+    /**
+     * Determines the category of an app based on package name, label, and system info
+     * 
+     * Priority:
+     * 1. System FLAG_IS_GAME
+     * 2. System ApplicationInfo category (API 26+)
+     * 3. Package/label keyword matching
+     */
+    fun getCategory(
+        packageName: String, 
+        label: String, 
+        appInfo: android.content.pm.ApplicationInfo?
+    ): String {
+        // Priority 1: Check system game flag
         if (appInfo != null) {
-            // Check flags for game
             val isGame = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_IS_GAME) != 0
             if (isGame) return "Games"
-
-            // API 26+ Application Category check
+            
+            // Priority 2: Check system category (API 26+)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 try {
-                    val cat = appInfo.category
-                    val mapped = when (cat) {
-                        android.content.pm.ApplicationInfo.CATEGORY_GAME -> "Games"
-                        android.content.pm.ApplicationInfo.CATEGORY_AUDIO -> "Entertainment"
-                        android.content.pm.ApplicationInfo.CATEGORY_VIDEO -> "Entertainment"
-                        android.content.pm.ApplicationInfo.CATEGORY_IMAGE -> "Entertainment"
-                        android.content.pm.ApplicationInfo.CATEGORY_SOCIAL -> "Social"
-                        android.content.pm.ApplicationInfo.CATEGORY_NEWS -> "Entertainment"
-                        android.content.pm.ApplicationInfo.CATEGORY_MAPS -> "Utilities"
-                        android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
-                        // Accessibility is 8 in API 31+
-                        8 -> "Utilities"
-                        else -> null
-                    }
-                    if (mapped != null) return mapped
+                    val mappedCategory = mapSystemCategory(appInfo.category)
+                    if (mappedCategory != null) return mappedCategory
                 } catch (t: Throwable) {
-                    // Fallback on any runtime linkage/compat issues
+                    Log.w("AppCategory", "Failed to get app category from ApplicationInfo", t)
                 }
             }
         }
-
-        // Exact match overrides or standard heuristics
+        
+        // Priority 3: Keyword-based matching
         val pkg = packageName.lowercase()
         val name = label.lowercase()
-
-        // Match Games
-        if (pkg.contains("game") || pkg.contains("arcade") || pkg.contains("playgames") ||
-            name.contains("game") || name.contains("arcade") || name.contains("puzzle") ||
-            pkg.contains("retroarch") || pkg.contains("steam") || pkg.contains("xbox")
-        ) {
-            return "Games"
+        
+        // Check each category in order of priority
+        for ((category, keywords) in categoryKeywords) {
+            if (matchesAnyKeyword(pkg, keywords) || matchesAnyKeyword(name, keywords)) {
+                return category
+            }
         }
-
-        // Match Productivity
-        if (pkg.contains("productivity") || pkg.contains("office") || pkg.contains("word") ||
-            pkg.contains("excel") || pkg.contains("sheet") || pkg.contains("slide") ||
-            pkg.contains("calendar") || pkg.contains("mail") || pkg.contains("gmail") ||
-            pkg.contains("notes") || pkg.contains("document") || pkg.contains("pdf") ||
-            name.contains("office") || name.contains("word") || name.contains("excel") ||
-            name.contains("sheet") || name.contains("slide") || name.contains("calendar") ||
-            name.contains("notes") || name.contains("mail") || name.contains("pdf") ||
-            pkg.contains("editor") || name.contains("editor") || pkg.contains("print")
-        ) {
-            return "Productivity"
-        }
-
-        // Match Social
-        if (pkg.contains("social") || pkg.contains("chat") || pkg.contains("messenger") ||
-            pkg.contains("whatsapp") || pkg.contains("instagram") || pkg.contains("facebook") ||
-            pkg.contains("twitter") || pkg.contains("discord") || pkg.contains("reddit") ||
-            pkg.contains("linkedin") || pkg.contains("tiktok") || pkg.contains("snapchat") ||
-            pkg.contains("telegram") || name.contains("chat") || name.contains("messenger") ||
-            name.contains("social") || name.contains("whatsapp") || name.contains("hangouts") ||
-            name.contains("contacts") || pkg.contains("telephony") || pkg.contains("contact")
-        ) {
-            return "Social"
-        }
-
-        // Match Entertainment / Streaming
-        if (pkg.contains("netflix") || pkg.contains("youtube") || pkg.contains("disney") ||
-            pkg.contains("hbo") || pkg.contains("spotify") || pkg.contains("player") ||
-            pkg.contains("video") || pkg.contains("tv") || pkg.contains("music") ||
-            pkg.contains("prime") || pkg.contains("twitch") || pkg.contains("stream") ||
-            pkg.contains("cinema") || pkg.contains("movie") || pkg.contains("audio") ||
-            pkg.contains("sound") || pkg.contains("gallery") || pkg.contains("photos") ||
-            name.contains("netflix") || name.contains("youtube") || name.contains("player") ||
-            name.contains("tv") || name.contains("video") || name.contains("music") ||
-            name.contains("twitch") || name.contains("spotify") ||
-            name.contains("stream") || name.contains("cinema") || name.contains("movie") ||
-            name.contains("gallery") || name.contains("photos") || name.contains("podcast")
-        ) {
-            return "Entertainment"
-        }
-
-        // Match Utilities & Tools
-        if (pkg.contains("settings") || pkg.contains("system") || pkg.contains("tool") ||
-            pkg.contains("utility") || pkg.contains("manager") || pkg.contains("calculator") ||
-            pkg.contains("clock") || pkg.contains("weather") || pkg.contains("map") ||
-            pkg.contains("navigation") || pkg.contains("files") || pkg.contains("download") ||
-            pkg.contains("installer") || pkg.contains("backup") || pkg.contains("cleaner") ||
-            pkg.contains("assistant") || pkg.contains("chrome") || pkg.contains("browser") ||
-            pkg.contains("vending") || pkg.contains("launcher") || pkg.contains("provider") ||
-            pkg.contains("search") || name.contains("settings") || name.contains("clock") ||
-            name.contains("calculator") || name.contains("weather") || name.contains("map") ||
-            name.contains("files") || name.contains("browser") || name.contains("cleaner") ||
-            name.contains("tool") || name.contains("system") || name.contains("launcher") ||
-            name.contains("updater") || name.contains("manager")
-        ) {
-            return "Utilities"
-        }
-
+        
+        // Default fallback
         return "Other"
     }
 }
@@ -698,7 +691,9 @@ fun CalendarTimeCustomizerOverlay(
         // Automatically request focus on TV remote open to prevent background scrolling
         try {
             focusRequester.requestFocus()
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            Log.d("FocusRequester", "Could not request focus in CalendarTimeCustomizerOverlay", e)
+        }
     }
 
     LaunchedEffect(useSystemTime) {
@@ -1004,7 +999,9 @@ fun AppOptionsDialog(
     LaunchedEffect(Unit) {
         try {
             focusRequester.requestFocus()
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            Log.d("FocusRequester", "Could not request focus", e)
+        }
     }
 
     Box(
@@ -1161,7 +1158,6 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
     val selectedApp by viewModel.selectedApp.collectAsState()
     val isStreamingActive by viewModel.isStreamingFeedActive.collectAsState()
 
-    var isDeveloperInfoOpen by remember { mutableStateOf(false) }
     var isCustomizerOpen by remember { mutableStateOf(false) }
     var appToEdit by remember { mutableStateOf<AppItem?>(null) }
     var rearrangingApp by remember { mutableStateOf<AppItem?>(null) }
@@ -1240,7 +1236,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                                 modifier = Modifier
                                     .size(36.dp)
                                     .onFocusChanged { isBackFocused = it.isFocused }
-                                    .focusable(enabled = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null && rearrangingApp == null)
+                                    .focusable(enabled = !isCustomizerOpen && appToEdit == null && rearrangingApp == null)
                                     .border(
                                         width = if (isBackFocused) 1.5.dp else 1.dp,
                                         color = if (isBackFocused) Color.White else Color(0x1FFFFFFF),
@@ -1263,7 +1259,6 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                             IconButton(
                                 onClick = { 
                                     // Close all overlays and return to main launcher view
-                                    isDeveloperInfoOpen = false
                                     isCustomizerOpen = false
                                     appToEdit = null
                                     rearrangingApp = null
@@ -1271,7 +1266,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                                 modifier = Modifier
                                     .size(36.dp)
                                     .onFocusChanged { isHomeFocused = it.isFocused }
-                                    .focusable(enabled = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null && rearrangingApp == null)
+                                    .focusable(enabled = !isCustomizerOpen && appToEdit == null && rearrangingApp == null)
                                     .border(
                                         width = if (isHomeFocused) 1.5.dp else 1.dp,
                                         color = if (isHomeFocused) Color.White else Color(0x1FFFFFFF),
@@ -1308,34 +1303,9 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            var isInfoFocused by remember { mutableStateOf(false) }
-                            IconButton(
-                                onClick = { isDeveloperInfoOpen = true },
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .onFocusChanged { isInfoFocused = it.isFocused }
-                                    .focusable(enabled = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null && rearrangingApp == null)
-                                    .border(
-                                        width = if (isInfoFocused) 1.5.dp else 1.dp,
-                                        color = if (isInfoFocused) Color.White else Color(0x1FFFFFFF),
-                                        shape = CircleShape
-                                    )
-                                    .background(
-                                        color = if (isInfoFocused) Color(0x11FFFFFF) else Color(0x05FFFFFF),
-                                        shape = CircleShape
-                                    )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Developer Info",
-                                    tint = if (isInfoFocused) Color.White else FireOrangePrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-
                             MinimalistTopClock(
                                 viewModel = viewModel,
-                                isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null && rearrangingApp == null
+                                isFocusable = !isCustomizerOpen && appToEdit == null && rearrangingApp == null
                             ) {
                                 isCustomizerOpen = true
                             }
@@ -1370,7 +1340,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                                         isPinned = isPinned,
                                         onClick = { launchAppDirectly(app) },
                                         onLongClick = { appToEdit = app },
-                                        isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null && rearrangingApp == null,
+                                        isFocusable = !isCustomizerOpen && appToEdit == null && rearrangingApp == null,
                                         rearrangingApp = rearrangingApp,
                                         onMoveApp = { offset -> viewModel.moveApp(app.packageName, offset) },
                                         onFinishRearranging = { rearrangingApp = null }
@@ -1419,7 +1389,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                                     isPinned = isPinned,
                                     onClick = { launchAppDirectly(app) },
                                     onLongClick = { appToEdit = app },
-                                    isFocusable = !isCustomizerOpen && !isDeveloperInfoOpen && appToEdit == null && (rearrangingApp == null || rearrangingApp?.packageName == app.packageName),
+                                    isFocusable = !isCustomizerOpen && appToEdit == null && (rearrangingApp == null || rearrangingApp?.packageName == app.packageName),
                                     rearrangingApp = rearrangingApp,
                                     onMoveApp = { offset -> viewModel.moveApp(app.packageName, offset) },
                                     onFinishRearranging = { rearrangingApp = null }
@@ -1498,12 +1468,6 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
             }
         }
 
-        if (isDeveloperInfoOpen) {
-            DeveloperInfoOverlay {
-                isDeveloperInfoOpen = false
-            }
-        }
-
         if (appToEdit != null) {
             val app = appToEdit!!
             val isPinned = favorites.contains(app.packageName)
@@ -1518,159 +1482,6 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
     }
 }
 
-// VAIBHAV DEVELOPER INFO DIALOG OVERLAY (FULLY DPAD FRIENDLY)
-@Composable
-fun DeveloperInfoOverlay(
-    onClose: () -> Unit
-) {
-    val context = LocalContext.current
-    var isCloseFocused by remember { mutableStateOf(false) }
-    var isTelegramFocused by remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
-
-    LaunchedEffect(Unit) {
-        // Automatically request D-pad focus on TV remote open to prevent D-pad background leak
-        try {
-            focusRequester.requestFocus()
-        } catch (e: Exception) {}
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
-            .clickable(enabled = true) { /* Intercept back click backdrop */ }
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF101416)),
-            border = BorderStroke(1.5.dp, FireOrangePrimary.copy(alpha = 0.6f)),
-            modifier = Modifier
-                .widthIn(max = 400.dp)
-                .fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .background(Color(0x1BFF6400), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Launcher information",
-                        tint = FireOrangePrimary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-
-                Text(
-                    text = "Launcher Info",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Text(
-                    text = "This dashboard launcher is completely optimized and styled for Android TV systems, providing direct application execution with high-contrast active icons highlighting.",
-                    color = FireTextSecondary,
-                    fontSize = 11.sp,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 15.sp
-                )
-
-                HorizontalDivider(color = Color(0x33FFFFFF), thickness = 1.dp)
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "DEVELOPED BY",
-                        color = FireOrangePrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = "Vaibhav",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "TELEGRAM CHANNEL / SUPPORT",
-                        color = FireTextSecondary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "t.me/BlackDex",
-                        color = FireAmberAccent,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .onFocusChanged { isTelegramFocused = it.isFocused }
-                            .focusable()
-                            .border(
-                                width = if (isTelegramFocused) 2.dp else 1.dp,
-                                color = if (isTelegramFocused) Color.White else FireOrangePrimary.copy(alpha = 0.3f),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .background(
-                                color = if (isTelegramFocused) Color(0x22FFFFFF) else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .clickable {
-                                try {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/BlackDex"))
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "t.me/BlackDex", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Button(
-                    onClick = onClose,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                        .onFocusChanged { isCloseFocused = it.isFocused }
-                        .border(
-                            width = if (isCloseFocused) 2.dp else 0.dp,
-                            color = Color.White,
-                            shape = RoundedCornerShape(100.dp)
-                        ),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isCloseFocused) Color.White else FireOrangePrimary,
-                        contentColor = Color.Black
-                    )
-                ) {
-                    Text("Dismiss", fontWeight = FontWeight.Black, fontSize = 13.sp)
-                }
-            }
-        }
-    }
-}
 
 // CINEMATIC BILLBOARD BANNER HERO CARD
 @Composable

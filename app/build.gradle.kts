@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-  namespace = "vaibhav.all.apps.launcher"
+  namespace = "com.tvapp.launcher"
   compileSdk = 36
 
   defaultConfig {
-    applicationId = "vaibhav.all.apps.launcher"
+    applicationId = "com.tvapp.launcher"
     minSdk = 24
     targetSdk = 36
     versionCode = 2
@@ -68,11 +68,11 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
-// to match the convention used in Web projects.
+// Configure the Secrets Gradle Plugin (optional, for API keys)
 secrets {
-  propertiesFileName = ".env"
-  defaultPropertiesFileName = ".env.example"
+  // Ignore missing files - app doesn't require secrets
+  ignoreList.add("keyToIgnore")
+  ignoreList.add("ignore")
 }
 
 // Some unused dependencies are commented out below instead of being removed.
