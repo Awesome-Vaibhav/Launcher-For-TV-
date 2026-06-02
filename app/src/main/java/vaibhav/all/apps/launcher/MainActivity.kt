@@ -1180,9 +1180,13 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
     }
 
     val filteredSystem = remember(searchQuery, systemApps) {
-        systemApps.filter {
-            NativeStringMatcher.containsIgnoreCase(it.name, searchQuery) ||
-                    NativeStringMatcher.containsIgnoreCase(it.packageName, searchQuery)
+        if (searchQuery.isBlank()) {
+            systemApps
+        } else {
+            systemApps.filter {
+                NativeStringMatcher.containsIgnoreCase(it.name, searchQuery) ||
+                        NativeStringMatcher.containsIgnoreCase(it.packageName, searchQuery)
+            }
         }
     }
 
