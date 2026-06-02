@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -314,6 +315,13 @@ object AppCategoryClassifier {
     }
 }
 
+private val SPECS_GAMES = listOf("INTERACTIVE", "LOCAL GAME", "60 FPS")
+private val SPECS_PRODUCTIVITY = listOf("WORKSPACE", "PRODUCTIVITY", "CLOUD DATA")
+private val SPECS_SOCIAL = listOf("SOCIAL", "MESSAGING", "COMMUNITY")
+private val SPECS_ENTERTAINMENT = listOf("CINEMATIC", "MEDIA FEED", "UHD/HD")
+private val SPECS_UTILITIES = listOf("CORE UTILITY", "SYSTEM RUNTIME")
+private val SPECS_OTHER = listOf("DEVICE SERVICE", "LOCAL SHORTCUT")
+
 // STATE CONTROLLER ViewModel
 class FireAppsViewModel(private val context: Context) : ViewModel() {
     private val sharedPrefs = context.getSharedPreferences("fire_apps_preferences", Context.MODE_PRIVATE)
@@ -469,18 +477,22 @@ class FireAppsViewModel(private val context: Context) : ViewModel() {
                     if (pName == context.packageName) return@mapNotNull null
                     val name = info.loadLabel(pm)?.toString() ?: pName
                     val icon = info.loadIcon(pm)
-                    val launchIntent = pm.getLaunchIntentForPackage(pName)
+                    val launchIntent = Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_LAUNCHER)
+                        component = android.content.ComponentName(pName, activityInfo.name)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                    }
                     val appInfo = activityInfo.applicationInfo
                     
                     val detectedCategory = AppCategoryClassifier.getCategory(pName, name, appInfo)
                     
                     val specs = when (detectedCategory) {
-                        "Games" -> listOf("INTERACTIVE", "LOCAL GAME", "60 FPS")
-                        "Productivity" -> listOf("WORKSPACE", "PRODUCTIVITY", "CLOUD DATA")
-                        "Social" -> listOf("SOCIAL", "MESSAGING", "COMMUNITY")
-                        "Entertainment" -> listOf("CINEMATIC", "MEDIA FEED", "UHD/HD")
-                        "Utilities" -> listOf("CORE UTILITY", "SYSTEM RUNTIME")
-                        else -> listOf("DEVICE SERVICE", "LOCAL SHORTCUT")
+                        "Games" -> SPECS_GAMES
+                        "Productivity" -> SPECS_PRODUCTIVITY
+                        "Social" -> SPECS_SOCIAL
+                        "Entertainment" -> SPECS_ENTERTAINMENT
+                        "Utilities" -> SPECS_UTILITIES
+                        else -> SPECS_OTHER
                     }
                     val description = when (detectedCategory) {
                         "Games" -> "Immersive gameplay application installed on this device. Start playing with zero buffering."
@@ -585,16 +597,21 @@ fun rememberCurrentTimeAndDate(
         }
     }
 
+    val timeFormat = remember(is24h) {
+        val timePattern = if (is24h) "HH:mm" else "hh:mm a"
+        java.text.SimpleDateFormat(timePattern, java.util.Locale.getDefault())
+    }
+
+    val dateFormat = remember {
+        val datePattern = "EEEE, MMMM dd, yyyy"
+        java.text.SimpleDateFormat(datePattern, java.util.Locale.getDefault())
+    }
+
     return remember(tick, useSystemTime, timeOffset, is24h) {
         val currentTimeMillis = System.currentTimeMillis() + if (useSystemTime) 0L else timeOffset
         val date = java.util.Date(currentTimeMillis)
 
-        val timePattern = if (is24h) "HH:mm" else "hh:mm a"
-        val timeFormat = java.text.SimpleDateFormat(timePattern, java.util.Locale.getDefault())
         val timeStr = timeFormat.format(date)
-
-        val datePattern = "EEEE, MMMM dd, yyyy"
-        val dateFormat = java.text.SimpleDateFormat(datePattern, java.util.Locale.getDefault())
         val dateStr = dateFormat.format(date)
 
         Pair(timeStr, dateStr)
@@ -2269,7 +2286,11 @@ fun AppIcon(app: AppItem, modifier: Modifier = Modifier) {
     if (app.isSystem) {
         if (app.iconDrawable != null) {
             val resources = LocalContext.current.resources
-            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+
+            val configuration = LocalConfiguration.current
+
+
+
             val drawable = remember(app.iconDrawable, configuration) {
                 app.iconDrawable?.constantState?.newDrawable(resources)?.mutate() ?: app.iconDrawable
             }
