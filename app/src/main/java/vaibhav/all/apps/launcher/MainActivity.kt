@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -585,16 +586,21 @@ fun rememberCurrentTimeAndDate(
         }
     }
 
+    val timeFormat = remember(is24h) {
+        val timePattern = if (is24h) "HH:mm" else "hh:mm a"
+        java.text.SimpleDateFormat(timePattern, java.util.Locale.getDefault())
+    }
+
+    val dateFormat = remember {
+        val datePattern = "EEEE, MMMM dd, yyyy"
+        java.text.SimpleDateFormat(datePattern, java.util.Locale.getDefault())
+    }
+
     return remember(tick, useSystemTime, timeOffset, is24h) {
         val currentTimeMillis = System.currentTimeMillis() + if (useSystemTime) 0L else timeOffset
         val date = java.util.Date(currentTimeMillis)
 
-        val timePattern = if (is24h) "HH:mm" else "hh:mm a"
-        val timeFormat = java.text.SimpleDateFormat(timePattern, java.util.Locale.getDefault())
         val timeStr = timeFormat.format(date)
-
-        val datePattern = "EEEE, MMMM dd, yyyy"
-        val dateFormat = java.text.SimpleDateFormat(datePattern, java.util.Locale.getDefault())
         val dateStr = dateFormat.format(date)
 
         Pair(timeStr, dateStr)
@@ -2265,7 +2271,8 @@ fun AppIcon(app: AppItem, modifier: Modifier = Modifier) {
     if (app.isSystem) {
         if (app.iconDrawable != null) {
             val resources = LocalContext.current.resources
-            val drawable = remember(app.iconDrawable, resources.configuration) {
+            val configuration = LocalConfiguration.current
+            val drawable = remember(app.iconDrawable, configuration) {
                 app.iconDrawable?.constantState?.newDrawable(resources)?.mutate() ?: app.iconDrawable
             }
             AndroidView(
