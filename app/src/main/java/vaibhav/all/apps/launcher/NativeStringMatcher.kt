@@ -22,7 +22,7 @@ object NativeStringMatcher {
         return if (isNativeLibraryLoaded) {
             try {
                 containsIgnoreCaseNative(text, query)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e("NativeStringMatcher", "Error calling native method, falling back to Kotlin", e)
                 text.contains(query, ignoreCase = true)
             }
