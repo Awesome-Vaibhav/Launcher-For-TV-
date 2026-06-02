@@ -41,6 +41,9 @@ jobs:
           echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/key.jks" >> "$GITHUB_ENV"
           echo "KEYSTORE=$GITHUB_WORKSPACE/key.jks" >> "$GITHUB_ENV"
 
+      - name: Create local.properties
+        run: touch local.properties
+
       - name: Run unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 

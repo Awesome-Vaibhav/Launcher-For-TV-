@@ -6,6 +6,10 @@ plugins {
   alias(libs.plugins.secrets)
 }
 
+kotlin {
+  jvmToolchain(11)
+}
+
 android {
   namespace = "com.tvapp.launcher"
   compileSdk = 36
@@ -14,6 +18,7 @@ android {
     applicationId = "com.tvapp.launcher"
     minSdk = 24
     targetSdk = 36
+    
     versionCode = 2
     versionName = "2.0"
 
@@ -43,8 +48,9 @@ android {
 
   buildTypes {
     release {
-      isCrunchPngs = false
-      isMinifyEnabled = false
+      isCrunchPngs = true
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
@@ -52,9 +58,6 @@ android {
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
-  }
-  kotlin {
-    jvmToolchain(11)
   }
   buildFeatures {
     compose = true
@@ -73,6 +76,9 @@ secrets {
   // Ignore missing files - app doesn't require secrets
   ignoreList.add("keyToIgnore")
   ignoreList.add("ignore")
+
+  // This file is checked into version control and prevents the crash if local.properties is missing
+  defaultPropertiesFileName = "local.defaults.properties"
 }
 
 // Some unused dependencies are commented out below instead of being removed.

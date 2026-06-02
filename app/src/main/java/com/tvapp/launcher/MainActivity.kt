@@ -11,8 +11,20 @@ import android.widget.ImageView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -20,7 +32,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.type
 import android.view.KeyEvent
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -30,7 +44,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,11 +73,16 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -64,13 +98,23 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import android.net.Uri
 import android.util.Log
 import android.widget.Toast
-import com.tvapp.launcher.ui.theme.*
-import kotlinx.coroutines.*
+import com.tvapp.launcher.ui.theme.FireAmberAccent
+import com.tvapp.launcher.ui.theme.FireOrangeGlow
+import com.tvapp.launcher.ui.theme.FireOrangePrimary
+import com.tvapp.launcher.ui.theme.FireTextMuted
+import com.tvapp.launcher.ui.theme.FireTextPrimary
+import com.tvapp.launcher.ui.theme.FireTextSecondary
+import com.tvapp.launcher.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // DATA MODEL representation
 data class AppItem(
@@ -1277,7 +1321,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                         
                         // Centered "Your apps" Title
                         Text(
-                            text = "Your apps",
+                            text = stringResource(R.string.your_apps),
                             color = Color.White,
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Normal,
@@ -1311,7 +1355,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text(
-                                text = "Favorite Apps",
+                                text = stringResource(R.string.favorite_apps),
                                 color = FireOrangePrimary,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
@@ -1341,7 +1385,7 @@ fun FireAppsDashboard(viewModel: FireAppsViewModel) {
 
                     item {
                         Text(
-                            text = "All Apps",
+                            text = stringResource(R.string.all_apps),
                             color = Color.White.copy(alpha = 0.8f),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
@@ -1668,7 +1712,7 @@ fun SearchSection(query: String, onQueryChange: (String) -> Unit, isFocusable: B
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = if (query.isNotEmpty()) query else "Search apps (Double-click to type)...",
+                        text = if (query.isNotEmpty()) query else stringResource(R.string.search_placeholder),
                         color = if (query.isNotEmpty()) FireTextPrimary else FireTextSecondary,
                         fontSize = 13.sp
                     )
