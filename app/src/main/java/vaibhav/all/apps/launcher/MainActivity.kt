@@ -597,16 +597,21 @@ fun rememberCurrentTimeAndDate(
         }
     }
 
+    val timeFormat = remember(is24h) {
+        val timePattern = if (is24h) "HH:mm" else "hh:mm a"
+        java.text.SimpleDateFormat(timePattern, java.util.Locale.getDefault())
+    }
+
+    val dateFormat = remember {
+        val datePattern = "EEEE, MMMM dd, yyyy"
+        java.text.SimpleDateFormat(datePattern, java.util.Locale.getDefault())
+    }
+
     return remember(tick, useSystemTime, timeOffset, is24h) {
         val currentTimeMillis = System.currentTimeMillis() + if (useSystemTime) 0L else timeOffset
         val date = java.util.Date(currentTimeMillis)
 
-        val timePattern = if (is24h) "HH:mm" else "hh:mm a"
-        val timeFormat = java.text.SimpleDateFormat(timePattern, java.util.Locale.getDefault())
         val timeStr = timeFormat.format(date)
-
-        val datePattern = "EEEE, MMMM dd, yyyy"
-        val dateFormat = java.text.SimpleDateFormat(datePattern, java.util.Locale.getDefault())
         val dateStr = dateFormat.format(date)
 
         Pair(timeStr, dateStr)
